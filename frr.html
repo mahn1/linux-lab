@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Маршрутизация через FRR</title>
+<style>
+:root{
+  --bg:#f6f7f9; --card:#ffffff; --text:#1d2330; --muted:#5d6675; --line:#d9dee6;
+  --code:#f1f3f6; --accent:#2f6fde;
+  --n28:#2f6fde; --n30:#e07b12; --n29:#1f9d55; --dev:#eef2f8; --devstroke:#7a8699;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#14171c; --card:#1c2027; --text:#e6e9ee; --muted:#9aa3b2; --line:#323946;
+    --code:#242a33; --accent:#6c9cff;
+    --n28:#6c9cff; --n30:#ffa64d; --n29:#4fd18b; --dev:#262c36; --devstroke:#7d889b;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.55 "Segoe UI",Roboto,Arial,sans-serif}
+main{max-width:1060px;margin:0 auto;padding:24px 16px 60px}
+h1{font-size:28px;margin:0 0 4px}
+h2{font-size:21px;margin:34px 0 10px;padding-top:6px;border-top:1px solid var(--line)}
+h3{font-size:17px;margin:20px 0 6px}
+.sub{color:var(--muted);margin:0 0 18px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin:12px 0}
+table{border-collapse:collapse;width:100%;font-size:15px}
+th,td{border:1px solid var(--line);padding:6px 9px;text-align:left}
+th{background:var(--code)}
+.tbl{overflow-x:auto}
+code{background:var(--code);padding:1px 5px;border-radius:4px;font-family:Consolas,"Cascadia Mono",monospace;font-size:14px}
+.pre{position:relative;margin:8px 0}
+pre{background:var(--code);border:1px solid var(--line);border-radius:8px;padding:12px 14px;overflow-x:auto;margin:0;
+    font-family:Consolas,"Cascadia Mono",monospace;font-size:14px;line-height:1.45}
+.copy{position:absolute;top:6px;right:6px;font-size:12px;padding:3px 8px;border:1px solid var(--line);
+      border-radius:5px;background:var(--card);color:var(--muted);cursor:pointer}
+.copy:hover{color:var(--text)}
+.dot{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:5px;vertical-align:middle}
+.note{border-left:4px solid var(--accent);background:var(--code);padding:10px 14px;border-radius:6px;margin:12px 0}
+.warn{border-left-color:var(--n30)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
+.dev-title{font-weight:600;margin:0 0 4px}
+.dev-title small{color:var(--muted);font-weight:400}
+svg{width:100%;height:auto;display:block}
+svg text{fill:var(--text);font-family:"Segoe UI",Roboto,Arial,sans-serif}
+svg .muted{fill:var(--muted)}
+ol li{margin:4px 0}
+@media print{.copy{display:none}body{background:#fff}}
+</style>
+</head>
+<body>
+<main>
+<h1>Маршрутизация через FRR (OSPF): ПК1 → R1 → R2 → ПК2</h1>
+<p class="sub">Лабораторная работа «Реализация сетей в Linux». Та же схема, но маршруты между R1 и R2 строит FRR по протоколу OSPF. Все шаги: от установки пакета до пинга.</p>
+<p class="sub"><a href="./">← Вариант со статическими маршрутами</a></p>
+
+
+<h2>1. Схема стенда</h2>
+<div class="card">
+<svg viewBox="0 0 1000 560" role="img" aria-label="Схема: ПК1, маршрутизаторы R1 и R2, ПК2, все кабели подключены к коммутатору">
+  <!-- Логические подсети (полосы сверху) -->
+  <rect x="40" y="18" width="330" height="26" rx="6" fill="var(--n28)" opacity=".15"/>
+  <text x="205" y="36" text-anchor="middle" font-size="14" font-weight="600" fill="var(--n28)" style="fill:var(--n28)">Сеть A: 10.0.0.0/28</text>
+  <rect x="380" y="18" width="240" height="26" rx="6" fill="var(--n30)" opacity=".15"/>
+  <text x="500" y="36" text-anchor="middle" font-size="14" font-weight="600" style="fill:var(--n30)">Сеть B: 10.0.0.24/30</text>
+  <rect x="630" y="18" width="330" height="26" rx="6" fill="var(--n29)" opacity=".15"/>
+  <text x="795" y="36" text-anchor="middle" font-size="14" font-weight="600" style="fill:var(--n29)">Сеть C: 10.0.0.16/29</text>
+
+  <!-- Кабели к коммутатору -->
+  <g stroke-width="3" fill="none">
+    <path d="M110 170 C110 300 250 330 250 420" stroke="var(--n28)"/>
+    <path d="M350 170 C350 300 330 330 330 420" stroke="var(--n28)"/>
+    <path d="M430 170 C430 300 450 330 450 420" stroke="var(--n30)"/>
+    <path d="M570 170 C570 300 550 330 550 420" stroke="var(--n30)"/>
+    <path d="M650 170 C650 300 670 330 670 420" stroke="var(--n29)"/>
+    <path d="M890 170 C890 300 750 330 750 420" stroke="var(--n29)"/>
+  </g>
+
+  <!-- Устройства -->
+  <g stroke="var(--devstroke)" stroke-width="1.5" fill="var(--dev)">
+    <rect x="40" y="70" width="140" height="100" rx="10"/>
+    <rect x="300" y="70" width="180" height="100" rx="10"/>
+    <rect x="520" y="70" width="180" height="100" rx="10"/>
+    <rect x="820" y="70" width="140" height="100" rx="10"/>
+  </g>
+  <!-- значки -->
+  <g stroke="var(--devstroke)" stroke-width="1.5" fill="none">
+    <rect x="92" y="84" width="36" height="24" rx="2"/><line x1="110" y1="108" x2="110" y2="114"/><line x1="100" y1="114" x2="120" y2="114"/>
+    <rect x="872" y="84" width="36" height="24" rx="2"/><line x1="890" y1="108" x2="890" y2="114"/><line x1="880" y1="114" x2="900" y2="114"/>
+    <circle cx="390" cy="96" r="14"/><path d="M380 96h20M394 90l6 6-6 6M386 90l-6 6 6 6"/>
+    <circle cx="610" cy="96" r="14"/><path d="M600 96h20M614 90l6 6-6 6M606 90l-6 6 6 6"/>
+  </g>
+  <text x="110" y="137" text-anchor="middle" font-size="17" font-weight="700">ПК1</text>
+  <text x="110" y="157" text-anchor="middle" font-size="12" class="muted">шлюз 10.0.0.3</text>
+  <text x="390" y="137" text-anchor="middle" font-size="17" font-weight="700">R1</text>
+  <text x="390" y="157" text-anchor="middle" font-size="12" class="muted">FRR · OSPF</text>
+  <text x="610" y="137" text-anchor="middle" font-size="17" font-weight="700">R2</text>
+  <text x="610" y="157" text-anchor="middle" font-size="12" class="muted">FRR · OSPF</text>
+  <text x="890" y="137" text-anchor="middle" font-size="17" font-weight="700">ПК2</text>
+  <text x="890" y="157" text-anchor="middle" font-size="12" class="muted">шлюз 10.0.0.17</text>
+
+  <!-- Порты на устройствах -->
+  <g stroke="var(--card)" stroke-width="2">
+    <circle cx="110" cy="170" r="6" fill="var(--n28)"/>
+    <circle cx="350" cy="170" r="6" fill="var(--n28)"/>
+    <circle cx="430" cy="170" r="6" fill="var(--n30)"/>
+    <circle cx="570" cy="170" r="6" fill="var(--n30)"/>
+    <circle cx="650" cy="170" r="6" fill="var(--n29)"/>
+    <circle cx="890" cy="170" r="6" fill="var(--n29)"/>
+  </g>
+
+  <!-- Подписи интерфейсов -->
+  <g font-size="12.5">
+    <text x="118" y="198" font-weight="700" style="fill:var(--n28)">enp4s0 · Net 0</text>
+    <text x="118" y="214">10.0.0.1/28</text>
+
+    <text x="342" y="198" text-anchor="end" font-weight="700" style="fill:var(--n28)">enp1s0 · Net 1</text>
+    <text x="342" y="214" text-anchor="end">10.0.0.3/28</text>
+
+    <text x="438" y="242" font-weight="700" style="fill:var(--n30)">enp4s0 · Net 0</text>
+    <text x="438" y="258">10.0.0.25/30</text>
+
+    <text x="562" y="198" text-anchor="end" font-weight="700" style="fill:var(--n30)">enp1s0 · Net 1</text>
+    <text x="562" y="214" text-anchor="end">10.0.0.26/30</text>
+
+    <text x="658" y="242" font-weight="700" style="fill:var(--n29)">enp3s0 · Net 2</text>
+    <text x="658" y="258">10.0.0.17/29</text>
+
+    <text x="882" y="198" text-anchor="end" font-weight="700" style="fill:var(--n29)">enp1s0 · Net 1</text>
+    <text x="882" y="214" text-anchor="end">10.0.0.19/29</text>
+  </g>
+
+  <!-- Коммутатор -->
+  <rect x="200" y="420" width="600" height="70" rx="10" fill="var(--dev)" stroke="var(--devstroke)" stroke-width="1.5"/>
+  <g stroke="var(--card)" stroke-width="2">
+    <rect x="242" y="414" width="16" height="12" rx="2" fill="var(--n28)"/>
+    <rect x="322" y="414" width="16" height="12" rx="2" fill="var(--n28)"/>
+    <rect x="442" y="414" width="16" height="12" rx="2" fill="var(--n30)"/>
+    <rect x="542" y="414" width="16" height="12" rx="2" fill="var(--n30)"/>
+    <rect x="662" y="414" width="16" height="12" rx="2" fill="var(--n29)"/>
+    <rect x="742" y="414" width="16" height="12" rx="2" fill="var(--n29)"/>
+  </g>
+  <text x="500" y="455" text-anchor="middle" font-size="17" font-weight="700">Коммутатор</text>
+  <text x="500" y="476" text-anchor="middle" font-size="12" class="muted">все кабели стенда; настройка не требуется</text>
+
+  <!-- Путь пинга -->
+  <g font-size="13">
+    <path d="M110 525 H890" stroke="var(--accent)" stroke-width="2" stroke-dasharray="6 5" fill="none" marker-end="url(#arr)"/>
+    <text x="500" y="546" text-anchor="middle" class="muted">путь ping: 10.0.0.1 → 10.0.0.3 (R1) → 10.0.0.26 (R2) → 10.0.0.19</text>
+  </g>
+  <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--accent)"/></marker></defs>
+</svg>
+<p style="margin:6px 0 0;font-size:14px;color:var(--muted)">
+<span class="dot" style="background:var(--n28)"></span>сеть A /28 &nbsp;
+<span class="dot" style="background:var(--n30)"></span>сеть B /30 &nbsp;
+<span class="dot" style="background:var(--n29)"></span>сеть C /29 &nbsp;·&nbsp; «Net N» — подпись кабеля/гнезда на стенде, в конфигах не используется.
+</p>
+</div>
+
+<h2>2. Таблица адресации</h2>
+<div class="tbl"><table>
+<tr><th>Устройство</th><th>Кабель</th><th>Интерфейс</th><th>IP / маска</th><th>Сеть</th><th>Шлюз / маршрутизация</th></tr>
+<tr><td>ПК1</td><td>Net 0</td><td>enp4s0</td><td>10.0.0.1/28</td><td>A</td><td>default via 10.0.0.3</td></tr>
+<tr><td rowspan="2">R1</td><td>Net 1</td><td>enp1s0</td><td>10.0.0.3/28</td><td>A</td><td>—</td></tr>
+<tr><td>Net 0</td><td>enp4s0</td><td>10.0.0.25/30</td><td>B</td><td>OSPF (FRR): узнаёт 10.0.0.16/29</td></tr>
+<tr><td rowspan="2">R2</td><td>Net 1</td><td>enp1s0</td><td>10.0.0.26/30</td><td>B</td><td>OSPF (FRR): узнаёт 10.0.0.0/28</td></tr>
+<tr><td>Net 2</td><td>enp3s0</td><td>10.0.0.17/29</td><td>C</td><td>—</td></tr>
+<tr><td>ПК2</td><td>Net 1</td><td>enp1s0</td><td>10.0.0.19/29</td><td>C</td><td>default via 10.0.0.17</td></tr>
+</table></div>
+
+<h3>Расчёт подсетей</h3>
+<div class="tbl"><table>
+<tr><th>Сеть</th><th>Маска</th><th>Адрес сети</th><th>Узлы</th><th>Broadcast</th><th>Узлов</th></tr>
+<tr><td>A (ПК1 — R1)</td><td>/28 = 255.255.255.240</td><td>10.0.0.0</td><td>10.0.0.1 – 10.0.0.14</td><td>10.0.0.15</td><td>14</td></tr>
+<tr><td>C (R2 — ПК2)</td><td>/29 = 255.255.255.248</td><td>10.0.0.16</td><td>10.0.0.17 – 10.0.0.22</td><td>10.0.0.23</td><td>6</td></tr>
+<tr><td>B (R1 — R2)</td><td>/30 = 255.255.255.252</td><td>10.0.0.24</td><td>10.0.0.25 – 10.0.0.26</td><td>10.0.0.27</td><td>2</td></tr>
+</table></div>
+<p>Подсети не пересекаются: 0–15, 16–23, 24–27. Сеть /30 между маршрутизаторами — ровно на два адреса, по одному на каждый конец канала.</p>
+
+<h2>3. Что меняется по сравнению со статикой</h2>
+<div class="note">
+<b>ПК1 и ПК2</b> — настраиваются так же: адрес + шлюз по умолчанию.<br>
+<b>R1 и R2</b> — в Netplan только адреса, <b>без</b> блока <code>routes</code>. Маршруты в чужие сети маршрутизаторы узнают друг от друга сами по протоколу <b>OSPF</b>, который запускает пакет <b>FRR</b>.<br>
+FRR ставится только на два компьютера-маршрутизатора (R1 и R2).
+</div>
+
+<h2>4. Установка FRR (на R1 и R2) — делать первым</h2>
+<div class="note warn">Ставить пакет нужно <b>до</b> настройки Netplan, пока у машины есть интернет. После перенастройки сети доступ в интернет может пропасть.</div>
+<div class="pre"><pre>sudo apt update
+sudo apt install -y frr</pre></div>
+<p>Проверка, что пакет установлен и служба есть:</p>
+<div class="pre"><pre>systemctl status frr --no-pager</pre></div>
+
+<h2>5. Подготовка (на всех четырёх машинах)</h2>
+<ol>
+<li>Подключить кабели по схеме.</li>
+<li>Проверить имена интерфейсов:
+<div class="pre"><pre>ip a</pre></div></li>
+<li>Убрать старые конфиги Netplan с теми же интерфейсами (если есть):
+<div class="pre"><pre>ls /etc/netplan/
+sudo mv /etc/netplan/50-cloud-init.yaml /etc/netplan/50-cloud-init.yaml.bak</pre></div></li>
+</ol>
+
+<h2>6. Netplan</h2>
+<div class="grid">
+<div class="card">
+<p class="dev-title">ПК1 <small>enp4s0 · 10.0.0.1/28</small></p>
+<div class="pre"><pre>sudo tee /etc/netplan/01-lab.yaml &gt; /dev/null &lt;&lt;'EOF'
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    enp4s0:
+      addresses: [10.0.0.1/28]
+      routes:
+        - to: default
+          via: 10.0.0.3
+EOF</pre></div>
+</div>
+<div class="card">
+<p class="dev-title">ПК2 <small>enp1s0 · 10.0.0.19/29</small></p>
+<div class="pre"><pre>sudo tee /etc/netplan/01-lab.yaml &gt; /dev/null &lt;&lt;'EOF'
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    enp1s0:
+      addresses: [10.0.0.19/29]
+      routes:
+        - to: default
+          via: 10.0.0.17
+EOF</pre></div>
+</div>
+<div class="card">
+<p class="dev-title">R1 <small>только адреса, без routes</small></p>
+<div class="pre"><pre>sudo tee /etc/netplan/01-lab.yaml &gt; /dev/null &lt;&lt;'EOF'
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    enp1s0:
+      addresses: [10.0.0.3/28]
+    enp4s0:
+      addresses: [10.0.0.25/30]
+EOF</pre></div>
+</div>
+<div class="card">
+<p class="dev-title">R2 <small>только адреса, без routes</small></p>
+<div class="pre"><pre>sudo tee /etc/netplan/01-lab.yaml &gt; /dev/null &lt;&lt;'EOF'
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    enp1s0:
+      addresses: [10.0.0.26/30]
+    enp3s0:
+      addresses: [10.0.0.17/29]
+EOF</pre></div>
+</div>
+</div>
+<p>Применить на всех четырёх:</p>
+<div class="pre"><pre>sudo chmod 600 /etc/netplan/01-lab.yaml
+sudo netplan apply</pre></div>
+<div class="note warn">Старый Netplan не принимает <code>to: default</code> — тогда на ПК1 пишется <code>gateway4: 10.0.0.3</code>, на ПК2 <code>gateway4: 10.0.0.17</code>.</div>
+
+<h2>7. Пересылка пакетов (только R1 и R2)</h2>
+<div class="pre"><pre>sudo sysctl -w net.ipv4.ip_forward=1</pre></div>
+<p>Ответ <code>net.ipv4.ip_forward = 1</code> — включено. После перезагрузки выполнить снова.</p>
+
+<h2>8. Включить OSPF в FRR (R1 и R2)</h2>
+<p>По умолчанию в FRR работают только служебные демоны. Включаем демон <code>ospfd</code> и перезапускаем FRR:</p>
+<div class="pre"><pre>sudo sed -i 's/^ospfd=no/ospfd=yes/' /etc/frr/daemons
+sudo systemctl restart frr
+grep ^ospfd /etc/frr/daemons</pre></div>
+<p>Последняя команда должна показать <code>ospfd=yes</code>.</p>
+
+<h2>9. Настройка OSPF</h2>
+<p>Каждый маршрутизатор объявляет в OSPF свои подключённые сети (area 0). Блок вставляется целиком — это одна команда <code>vtysh</code> с несколькими <code>-c</code>; в конце конфигурация сохраняется (<code>write memory</code> → <code>/etc/frr/frr.conf</code>).</p>
+<div class="grid">
+<div class="card">
+<p class="dev-title">R1 <small>сети A и B</small></p>
+<div class="pre"><pre>sudo vtysh \
+  -c 'configure terminal' \
+  -c 'router ospf' \
+  -c 'ospf router-id 1.1.1.1' \
+  -c 'network 10.0.0.0/28 area 0' \
+  -c 'network 10.0.0.24/30 area 0' \
+  -c 'end' \
+  -c 'write memory'</pre></div>
+</div>
+<div class="card">
+<p class="dev-title">R2 <small>сети B и C</small></p>
+<div class="pre"><pre>sudo vtysh \
+  -c 'configure terminal' \
+  -c 'router ospf' \
+  -c 'ospf router-id 2.2.2.2' \
+  -c 'network 10.0.0.24/30 area 0' \
+  -c 'network 10.0.0.16/29 area 0' \
+  -c 'end' \
+  -c 'write memory'</pre></div>
+</div>
+</div>
+<h3>То же самое вручную в консоли vtysh</h3>
+<p>Если преподаватель хочет видеть ввод по шагам (на примере R1):</p>
+<div class="pre"><pre>sudo vtysh
+configure terminal
+router ospf
+ospf router-id 1.1.1.1
+network 10.0.0.0/28 area 0
+network 10.0.0.24/30 area 0
+end
+write memory
+exit</pre></div>
+
+<h2>10. Проверка OSPF (R1 и R2)</h2>
+<p>Соседство поднимается не сразу — подождать до 40 секунд.</p>
+<div class="pre"><pre>sudo vtysh -c 'show ip ospf neighbor'</pre></div>
+<p>Должен быть виден сосед (на R1 — <code>2.2.2.2</code>, на R2 — <code>1.1.1.1</code>) в состоянии <code>Full</code>.</p>
+<div class="pre"><pre>sudo vtysh -c 'show ip route ospf'
+ip r</pre></div>
+<p>В <code>ip r</code> на маршрутизаторе снова три строки, но маршрут в чужую сеть помечен <code>proto ospf</code>:</p>
+<div class="grid">
+<div class="card"><p class="dev-title">R1 — <code>ip r</code></p>
+<pre>10.0.0.0/28 dev enp1s0 proto kernel scope link src 10.0.0.3
+10.0.0.16/29 via 10.0.0.26 dev enp4s0 proto ospf metric 20
+10.0.0.24/30 dev enp4s0 proto kernel scope link src 10.0.0.25</pre></div>
+<div class="card"><p class="dev-title">R2 — <code>ip r</code></p>
+<pre>10.0.0.0/28 via 10.0.0.25 dev enp1s0 proto ospf metric 20
+10.0.0.16/29 dev enp3s0 proto kernel scope link src 10.0.0.17
+10.0.0.24/30 dev enp1s0 proto kernel scope link src 10.0.0.26</pre></div>
+</div>
+<p>Значение <code>metric</code> может отличаться — главное, что строка с <code>via</code> и <code>proto ospf</code> есть.</p>
+
+<h2>11. Пинг</h2>
+<p>С ПК1 по цепочке:</p>
+<div class="pre"><pre>ping -c 3 10.0.0.3     # R1, вход
+ping -c 3 10.0.0.26    # R2, вход
+ping -c 3 10.0.0.19    # ПК2 — цель</pre></div>
+<div class="pre"><pre>tracepath 10.0.0.19</pre></div>
+<p>Прыжки: <code>10.0.0.3</code> → <code>10.0.0.26</code> → <code>10.0.0.19</code>. Обратно — с ПК2: <code>ping -c 3 10.0.0.1</code>.</p>
+
+<h2>12. Если не работает</h2>
+<div class="tbl"><table>
+<tr><th>Симптом</th><th>Что проверить</th></tr>
+<tr><td><code>apt install frr</code>: пакет не найден / нет сети</td><td>Нет интернета или не выполнен <code>sudo apt update</code>. Ставить до перенастройки Netplan.</td></tr>
+<tr><td><code>vtysh</code>: unknown command <code>router ospf</code></td><td>Демон ospfd не включён: <code>grep ^ospfd /etc/frr/daemons</code> → <code>yes</code>, затем <code>sudo systemctl restart frr</code>.</td></tr>
+<tr><td>В <code>show ip ospf neighbor</code> пусто</td><td>Не пингуется сосед по сети B (10.0.0.25 ↔ 10.0.0.26) — кабель/адреса; в <code>network</code> не та подсеть; файрвол (<code>sudo ufw disable</code> на время работы).</td></tr>
+<tr><td>Сосед Full, но маршрута <code>proto ospf</code> нет</td><td>Чужая сеть не объявлена командой <code>network</code> на соседнем маршрутизаторе.</td></tr>
+<tr><td>Маршруты есть, пинг до ПК2 не идёт</td><td><code>ip_forward</code> на R1/R2, шлюз и маска на ПК (<code>ip r</code>).</td></tr>
+<tr><td>После перезагрузки всё пропало</td><td>Повторить <code>sysctl -w</code>; если OSPF пропал — не был выполнен <code>write memory</code>.</td></tr>
+</table></div>
+
+<h2>13. Кратко для защиты</h2>
+<ul>
+<li><b>FRR</b> — пакет динамической маршрутизации для Linux (OSPF, BGP, RIP и др.); <code>zebra</code> передаёт найденные маршруты в ядро, <code>ospfd</code> работает по OSPF, <code>vtysh</code> — общая консоль настройки.</li>
+<li><b>OSPF</b> — протокол состояния каналов: маршрутизаторы находят соседей, обмениваются сведениями о сетях и сами строят таблицу маршрутов.</li>
+<li><b>Отличие от статики:</b> маршруты не прописываются вручную; при добавлении новой сети достаточно объявить её командой <code>network</code>.</li>
+<li><b>router-id</b> — уникальный идентификатор маршрутизатора в OSPF; <b>area 0</b> — магистральная (основная) область.</li>
+<li>Конечным ПК OSPF не нужен — им достаточно шлюза по умолчанию.</li>
+</ul>
+</main>
+<script>
+// Кнопки «Копировать» для блоков команд (комментарии после # не копируются)
+document.querySelectorAll('.pre').forEach(function (box) {
+  var b = document.createElement('button');
+  b.className = 'copy'; b.textContent = 'Копировать';
+  b.onclick = function () {
+    var text = box.querySelector('pre').innerText.split('\n')
+      .map(function (l) { return l.replace(/\s+#\s.*$/, ''); }).join('\n');
+    try {
+      navigator.clipboard.writeText(text).then(function () {
+        b.textContent = 'Скопировано'; setTimeout(function () { b.textContent = 'Копировать'; }, 1500);
+      });
+    } catch (e) {}
+  };
+  box.appendChild(b);
+});
+</script>
+</body>
+</html>
