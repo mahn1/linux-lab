@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Лаб 3 · Динамическая маршрутизация RIP</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+<nav class="topbar"><a class="brand" href="./">Linux<span>Lab</span></a><a href="./">Библиотека</a> <a href="static.html">Статика · Netplan</a> <a href="frr.html">Статика · FRR</a> <b>RIP · Лаб 3</b></nav>
+<h1>Лаб №3. Динамическая маршрутизация <span class="red">RIP</span></h1>
+<p class="sub">Реализация сетей в Linux. Схема и адресация из предыдущей лабораторной. Рабочие станции — Netplan, маршрутизаторы — FRR (vtysh).</p>
+<h2>1. Схема стенда</h2>
+<div class="card">
+<svg viewBox="0 0 1000 560" role="img" aria-label="Схема: ПК1, маршрутизаторы R1 и R2, ПК2, все кабели подключены к коммутатору">
+  <!-- Логические подсети (полосы сверху) -->
+  <rect x="40" y="18" width="330" height="26" rx="6" fill="var(--n28)" opacity=".15"/>
+  <text x="205" y="36" text-anchor="middle" font-size="14" font-weight="600" fill="var(--n28)" style="fill:var(--n28)">Сеть A: 10.0.0.0/28</text>
+  <rect x="380" y="18" width="240" height="26" rx="6" fill="var(--n30)" opacity=".15"/>
+  <text x="500" y="36" text-anchor="middle" font-size="14" font-weight="600" style="fill:var(--n30)">Сеть B: 10.0.0.24/30</text>
+  <rect x="630" y="18" width="330" height="26" rx="6" fill="var(--n29)" opacity=".15"/>
+  <text x="795" y="36" text-anchor="middle" font-size="14" font-weight="600" style="fill:var(--n29)">Сеть C: 10.0.0.16/29</text>
+
+  <!-- Кабели к коммутатору -->
+  <g stroke-width="3" fill="none">
+    <path d="M110 170 C110 300 250 330 250 420" stroke="var(--n28)"/>
+    <path d="M350 170 C350 300 330 330 330 420" stroke="var(--n28)"/>
+    <path d="M430 170 C430 300 450 330 450 420" stroke="var(--n30)"/>
+    <path d="M570 170 C570 300 550 330 550 420" stroke="var(--n30)"/>
+    <path d="M650 170 C650 300 670 330 670 420" stroke="var(--n29)"/>
+    <path d="M890 170 C890 300 750 330 750 420" stroke="var(--n29)"/>
+  </g>
+
+  <!-- Устройства -->
+  <g stroke="var(--devstroke)" stroke-width="1.5" fill="var(--dev)">
+    <rect x="40" y="70" width="140" height="100" rx="10"/>
+    <rect x="300" y="70" width="180" height="100" rx="10"/>
+    <rect x="520" y="70" width="180" height="100" rx="10"/>
+    <rect x="820" y="70" width="140" height="100" rx="10"/>
+  </g>
+  <!-- значки -->
+  <g stroke="var(--devstroke)" stroke-width="1.5" fill="none">
+    <rect x="92" y="84" width="36" height="24" rx="2"/><line x1="110" y1="108" x2="110" y2="114"/><line x1="100" y1="114" x2="120" y2="114"/>
+    <rect x="872" y="84" width="36" height="24" rx="2"/><line x1="890" y1="108" x2="890" y2="114"/><line x1="880" y1="114" x2="900" y2="114"/>
+    <circle cx="390" cy="96" r="14"/><path d="M380 96h20M394 90l6 6-6 6M386 90l-6 6 6 6"/>
+    <circle cx="610" cy="96" r="14"/><path d="M600 96h20M614 90l6 6-6 6M606 90l-6 6 6 6"/>
+  </g>
+  <text x="110" y="137" text-anchor="middle" font-size="17" font-weight="700">ПК1</text>
+  <text x="110" y="157" text-anchor="middle" font-size="12" class="muted">шлюз 10.0.0.3</text>
+  <text x="390" y="137" text-anchor="middle" font-size="17" font-weight="700">R1</text>
+  <text x="390" y="157" text-anchor="middle" font-size="12" class="muted">FRR · RIP</text>
+  <text x="610" y="137" text-anchor="middle" font-size="17" font-weight="700">R2</text>
+  <text x="610" y="157" text-anchor="middle" font-size="12" class="muted">FRR · RIP</text>
+  <text x="890" y="137" text-anchor="middle" font-size="17" font-weight="700">ПК2</text>
+  <text x="890" y="157" text-anchor="middle" font-size="12" class="muted">шлюз 10.0.0.17</text>
+
+  <!-- Порты на устройствах -->
+  <g stroke="var(--card)" stroke-width="2">
+    <circle cx="110" cy="170" r="6" fill="var(--n28)"/>
+    <circle cx="350" cy="170" r="6" fill="var(--n28)"/>
+    <circle cx="430" cy="170" r="6" fill="var(--n30)"/>
+    <circle cx="570" cy="170" r="6" fill="var(--n30)"/>
+    <circle cx="650" cy="170" r="6" fill="var(--n29)"/>
+    <circle cx="890" cy="170" r="6" fill="var(--n29)"/>
+  </g>
+
+  <!-- Подписи интерфейсов -->
+  <g font-size="12.5">
+    <text x="118" y="198" font-weight="700" style="fill:var(--n28)">enp4s0 · Net 0</text>
+    <text x="118" y="214">10.0.0.1/28</text>
+
+    <text x="342" y="198" text-anchor="end" font-weight="700" style="fill:var(--n28)">enp1s0 · Net 1</text>
+    <text x="342" y="214" text-anchor="end">10.0.0.3/28</text>
+
+    <text x="438" y="242" font-weight="700" style="fill:var(--n30)">enp4s0 · Net 0</text>
+    <text x="438" y="258">10.0.0.25/30</text>
+
+    <text x="562" y="198" text-anchor="end" font-weight="700" style="fill:var(--n30)">enp1s0 · Net 1</text>
+    <text x="562" y="214" text-anchor="end">10.0.0.26/30</text>
+
+    <text x="658" y="242" font-weight="700" style="fill:var(--n29)">enp3s0 · Net 2</text>
+    <text x="658" y="258">10.0.0.17/29</text>
+
+    <text x="882" y="198" text-anchor="end" font-weight="700" style="fill:var(--n29)">enp1s0 · Net 1</text>
+    <text x="882" y="214" text-anchor="end">10.0.0.19/29</text>
+  </g>
+
+  <!-- Коммутатор -->
+  <rect x="200" y="420" width="600" height="70" rx="10" fill="var(--dev)" stroke="var(--devstroke)" stroke-width="1.5"/>
+  <g stroke="var(--card)" stroke-width="2">
+    <rect x="242" y="414" width="16" height="12" rx="2" fill="var(--n28)"/>
+    <rect x="322" y="414" width="16" height="12" rx="2" fill="var(--n28)"/>
+    <rect x="442" y="414" width="16" height="12" rx="2" fill="var(--n30)"/>
+    <rect x="542" y="414" width="16" height="12" rx="2" fill="var(--n30)"/>
+    <rect x="662" y="414" width="16" height="12" rx="2" fill="var(--n29)"/>
+    <rect x="742" y="414" width="16" height="12" rx="2" fill="var(--n29)"/>
+  </g>
+  <text x="500" y="455" text-anchor="middle" font-size="17" font-weight="700">Коммутатор</text>
+  <text x="500" y="476" text-anchor="middle" font-size="12" class="muted">все кабели стенда; настройка не требуется</text>
+
+  <!-- Путь пинга -->
+  <g font-size="13">
+    <path d="M110 525 H890" stroke="var(--accent)" stroke-width="2" stroke-dasharray="6 5" fill="none" marker-end="url(#arr)"/>
+    <text x="500" y="546" text-anchor="middle" class="muted">путь ping: 10.0.0.1 → 10.0.0.3 (R1) → 10.0.0.26 (R2) → 10.0.0.19</text>
+  </g>
+  <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--accent)"/></marker></defs>
+</svg>
+<p style="margin:6px 0 0;font-size:14px;color:var(--muted)">
+<span class="dot" style="background:var(--n28)"></span>сеть A /28 &nbsp;
+<span class="dot" style="background:var(--n30)"></span>сеть B /30 &nbsp;
+<span class="dot" style="background:var(--n29)"></span>сеть C /29 &nbsp;·&nbsp; «Net N» — подпись кабеля/гнезда на стенде, в конфигах не используется.
+</p>
+</div>
+
+<h2>2. Таблица адресации</h2>
+<div class="tbl"><table>
+<tr><th>Устройство</th><th>Кабель</th><th>Интерфейс</th><th>IP / маска</th><th>Сеть</th><th>Шлюз / маршрутизация</th></tr>
+<tr><td>ПК1</td><td>Net 0</td><td>enp4s0</td><td>10.0.0.1/28</td><td>A</td><td>Netplan: default via 10.0.0.3</td></tr>
+<tr><td rowspan="2">R1</td><td>Net 1</td><td>enp1s0</td><td>10.0.0.3/28</td><td>A</td><td>—</td></tr>
+<tr><td>Net 0</td><td>enp4s0</td><td>10.0.0.25/30</td><td>B</td><td>RIP (или <code>ip route 10.0.0.16/29 10.0.0.26</code>)</td></tr>
+<tr><td rowspan="2">R2</td><td>Net 1</td><td>enp1s0</td><td>10.0.0.26/30</td><td>B</td><td>RIP (или <code>ip route 10.0.0.0/28 10.0.0.25</code>)</td></tr>
+<tr><td>Net 2</td><td>enp3s0</td><td>10.0.0.17/29</td><td>C</td><td>—</td></tr>
+<tr><td>ПК2</td><td>Net 1</td><td>enp1s0</td><td>10.0.0.19/29</td><td>C</td><td>Netplan: default via 10.0.0.17</td></tr>
+</table></div>
+
+<h3>Расчёт подсетей</h3>
+<div class="tbl"><table>
+<tr><th>Сеть</th><th>Маска</th><th>Адрес сети</th><th>Узлы</th><th>Broadcast</th><th>Узлов</th></tr>
+<tr><td>A (ПК1 — R1)</td><td>/28 = 255.255.255.240</td><td>10.0.0.0</td><td>10.0.0.1 – 10.0.0.14</td><td>10.0.0.15</td><td>14</td></tr>
+<tr><td>C (R2 — ПК2)</td><td>/29 = 255.255.255.248</td><td>10.0.0.16</td><td>10.0.0.17 – 10.0.0.22</td><td>10.0.0.23</td><td>6</td></tr>
+<tr><td>B (R1 — R2)</td><td>/30 = 255.255.255.252</td><td>10.0.0.24</td><td>10.0.0.25 – 10.0.0.26</td><td>10.0.0.27</td><td>2</td></tr>
+</table></div>
+<p>Подсети не пересекаются: 0–15, 16–23, 24–27. Сеть /30 между маршрутизаторами — ровно на два адреса, по одному на каждый конец канала.</p>
+
+<h2>3. Порядок работы</h2>
+<ol>
+<li><span class="step">0</span>Восстановить исходную конфигурацию — <code>timeshift --restore</code>.</li>
+<li><span class="step">1</span>Установить пакет <code>frr</code> (на маршрутизаторах R1 и R2).</li>
+<li><span class="step">2</span>На рабочих станциях — IP-адреса и шлюзы по умолчанию через <b>Netplan</b>.</li>
+<li><span class="step">3</span>На маршрутизаторах войти в <code>vtysh</code> (адреса интерфейсов — как в предыдущей лабораторной).</li>
+<li><span class="step">4</span>Добавить маршруты до недостающих сетей.</li>
+<li><span class="step">5</span>Включить маршрутизацию.</li>
+<li><span class="step">6</span>Сохранить конфигурацию: <code>copy running-config startup-config</code>.</li>
+</ol>
+<div class="note warn"><b>Внимание:</b> работа называется «Динамическая маршрутизация RIP», но в пункте 4 задания указаны <b>статические</b> маршруты <code>ip route</code>. В гайде есть оба варианта: пункты 0–6 точно по заданию (п. 8–11) и настройка <b>RIP</b> вместо статики (п. 12). Какой вариант защищать — уточните у преподавателя; скорее всего ожидается RIP.</div>
+
+<h2>4. Пункт 0. Восстановление (все машины)</h2>
+<div class="pre"><pre>sudo timeshift --restore</pre></div>
+<p>Выбрать снимок стенда и подтвердить. После восстановления система перезагружается.</p>
+
+<h2>5. Пункт 1. Установка FRR (R1 и R2, через вузовскую сеть)</h2>
+<ol>
+<li>Воткнуть вузовский кабель в маршрутизатор, проверить интернет:
+<div class="pre"><pre>ip -br a
+ping -c 3 ya.ru</pre></div>
+Нет адреса — <code>sudo dhclient -v &lt;интерфейс&gt;</code>.</li>
+<li>Поставить FRR (и traceroute для проверки в конце):
+<div class="pre"><pre>sudo apt update
+sudo apt install -y frr traceroute</pre></div></li>
+<li>Проверить: <code>systemctl status frr --no-pager</code>. Вынуть вузовский кабель, повторить на втором маршрутизаторе.</li>
+</ol>
+<div class="note">Рабочим станциям FRR не нужен — они настраиваются через Netplan. traceroute на ПК можно поставить так же, пока подключён интернет, или пользоваться <code>tracepath</code>.</div>
+
+<h2>6. Сборка стенда и проверка кабелей (все машины)</h2>
+<div class="pre"><pre>ip -br link</pre></div>
+<p><code>UP</code> должен быть на интерфейсах из таблицы, иначе кабель не в том порту.</p>
+
+<h2>7. Пункт 2. Рабочие станции: Netplan</h2>
+<p>Убрать старые конфиги с теми же интерфейсами (после restore там обычно DHCP):</p>
+<div class="pre"><pre>ls /etc/netplan/
+sudo mv /etc/netplan/50-cloud-init.yaml /etc/netplan/50-cloud-init.yaml.bak</pre></div>
+<p>(имя файла может быть другим — переносится любой, кроме <code>01-lab.yaml</code>).</p>
+<div class="grid">
+<div class="card">
+<p class="dev-title">ПК1 <small>enp4s0 · 10.0.0.1/28 · шлюз 10.0.0.3</small></p>
+<div class="pre"><pre>sudo tee /etc/netplan/01-lab.yaml &gt; /dev/null &lt;&lt;'EOF'
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    enp4s0:
+      addresses: [10.0.0.1/28]
+      routes:
+        - to: default
+          via: 10.0.0.3
+EOF</pre></div>
+</div>
+<div class="card">
+<p class="dev-title">ПК2 <small>enp1s0 · 10.0.0.19/29 · шлюз 10.0.0.17</small></p>
+<div class="pre"><pre>sudo tee /etc/netplan/01-lab.yaml &gt; /dev/null &lt;&lt;'EOF'
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    enp1s0:
+      addresses: [10.0.0.19/29]
+      routes:
+        - to: default
+          via: 10.0.0.17
+EOF</pre></div>
+</div>
+</div>
+<div class="pre"><pre>sudo chmod 600 /etc/netplan/01-lab.yaml
+sudo netplan apply
+ip -br a
+ip r</pre></div>
+<p>В <code>ip r</code>: <code>default via &lt;шлюз&gt;</code> и своя сеть. Старый Netplan не понимает <code>to: default</code> — тогда <code>gateway4: 10.0.0.3</code> (ПК1) / <code>gateway4: 10.0.0.17</code> (ПК2).</p>
+
+<h2>8. Пункт 3. Маршрутизаторы: vtysh и адреса интерфейсов</h2>
+<p>Адреса маршрутизаторов — из предыдущей лабораторной; после restore их нужно задать заново. Делаем это в vtysh:</p>
+<div class="grid">
+<div class="card">
+<p class="dev-title">R1</p>
+<div class="pre"><pre>sudo vtysh
+configure terminal
+interface enp1s0
+ip address 10.0.0.3/28
+exit
+interface enp4s0
+ip address 10.0.0.25/30
+exit</pre></div>
+</div>
+<div class="card">
+<p class="dev-title">R2</p>
+<div class="pre"><pre>sudo vtysh
+configure terminal
+interface enp1s0
+ip address 10.0.0.26/30
+exit
+interface enp3s0
+ip address 10.0.0.17/29
+exit</pre></div>
+</div>
+</div>
+<p>Проверка соседей (во втором терминале): с R1 — <code>ping -c 3 10.0.0.1</code> и <code>ping -c 3 10.0.0.26</code>, с R2 — <code>ping -c 3 10.0.0.25</code> и <code>ping -c 3 10.0.0.19</code>.</p>
+
+<h2>9. Пункт 4. Маршруты до недостающих сетей (по заданию — статические)</h2>
+<p>В режиме глобального конфигурирования <code>(config)#</code>:</p>
+<div class="grid">
+<div class="card">
+<p class="dev-title">R1 <small>не знает сеть C</small></p>
+<div class="pre"><pre>ip route 10.0.0.16/29 10.0.0.26</pre></div>
+</div>
+<div class="card">
+<p class="dev-title">R2 <small>не знает сеть A</small></p>
+<div class="pre"><pre>ip route 10.0.0.0/28 10.0.0.25</pre></div>
+</div>
+</div>
+<p>Если делаете вариант с RIP — этот пункт заменяется п. 12.</p>
+
+<h2>10. Пункт 5. Включение маршрутизации (R1 и R2)</h2>
+<div class="pre"><pre>ip forwarding</pre></div>
+<p>В задании написано <code>ip forward</code> — vtysh понимает сокращения, поэтому сработает и так; полная форма команды — <code>ip forwarding</code>.</p>
+
+<h2>11. Пункт 6. Сохранение (R1 и R2)</h2>
+<p>Выйти из режима настройки в привилегированный режим и сохранить:</p>
+<div class="pre"><pre>end
+copy running-config startup-config</pre></div>
+<p>Конфигурация записывается в <code>/etc/frr/frr.conf</code>. Посмотреть: <code>show running-config</code>.</p>
+
+<h2>12. Вариант RIP (динамическая маршрутизация)</h2>
+<p>Вместо статических маршрутов из п. 9 маршрутизаторы сами обмениваются сведениями о сетях по протоколу RIP.</p>
+<h3>12.1. Включить демон ripd (R1 и R2, в обычном терминале)</h3>
+<div class="pre"><pre>sudo sed -i 's/^ripd=no/ripd=yes/' /etc/frr/daemons
+sudo systemctl restart frr
+grep ^ripd /etc/frr/daemons</pre></div>
+<p>Должно быть <code>ripd=yes</code>. После перезапуска FRR несохранённые настройки vtysh пропадут — если п. 8 не сохраняли, задайте адреса заново (или сначала выполните п. 11).</p>
+<h3>12.2. Настроить RIP</h3>
+<div class="grid">
+<div class="card">
+<p class="dev-title">R1 <small>сети A и B</small></p>
+<div class="pre"><pre>sudo vtysh
+configure terminal
+router rip
+version 2
+network 10.0.0.0/28
+network 10.0.0.24/30
+exit
+ip forwarding
+end
+copy running-config startup-config</pre></div>
+</div>
+<div class="card">
+<p class="dev-title">R2 <small>сети B и C</small></p>
+<div class="pre"><pre>sudo vtysh
+configure terminal
+router rip
+version 2
+network 10.0.0.24/30
+network 10.0.0.16/29
+exit
+ip forwarding
+end
+copy running-config startup-config</pre></div>
+</div>
+</div>
+<div class="note"><b>version 2 обязательно:</b> у нас подсети разной длины (/28, /30, /29). RIP версии 1 не передаёт маски и с такой адресацией работать не будет.</div>
+<div class="note warn">Если статические маршруты из п. 9 уже введены, они «перебивают» RIP (у статики административное расстояние 1, у RIP — 120). Чтобы увидеть работу RIP, удалите их: на R1 <code>no ip route 10.0.0.16/29 10.0.0.26</code>, на R2 <code>no ip route 10.0.0.0/28 10.0.0.25</code>.</div>
+<h3>12.3. Проверка RIP</h3>
+<p>Обновления RIP рассылаются раз в 30 секунд — подождите до минуты.</p>
+<div class="pre"><pre>show ip rip
+show ip route</pre></div>
+<div class="grid">
+<div class="card"><p class="dev-title">R1 — <code>show ip route</code></p>
+<pre>C&gt;* 10.0.0.0/28 is directly connected, enp1s0
+R&gt;* 10.0.0.16/29 [120/2] via 10.0.0.26, enp4s0
+C&gt;* 10.0.0.24/30 is directly connected, enp4s0</pre></div>
+<div class="card"><p class="dev-title">R2 — <code>show ip route</code></p>
+<pre>R&gt;* 10.0.0.0/28 [120/2] via 10.0.0.25, enp1s0
+C&gt;* 10.0.0.16/29 is directly connected, enp3s0
+C&gt;* 10.0.0.24/30 is directly connected, enp1s0</pre></div>
+</div>
+<p><code>R</code> — маршрут получен по RIP, <code>[120/2]</code> — административное расстояние / метрика (число переходов). Формат вывода может немного отличаться.</p>
+
+<h2>13. Проверка связи</h2>
+<div class="grid">
+<div class="card"><p class="dev-title">С ПК1</p>
+<div class="pre"><pre>ping -c 3 10.0.0.19
+traceroute 10.0.0.19</pre></div>
+<p>10.0.0.3 → 10.0.0.26 → 10.0.0.19</p></div>
+<div class="card"><p class="dev-title">С ПК2</p>
+<div class="pre"><pre>ping -c 3 10.0.0.1
+traceroute 10.0.0.1</pre></div>
+<p>10.0.0.17 → 10.0.0.25 → 10.0.0.1</p></div>
+</div>
+
+<h2>14. Если не работает</h2>
+<div class="tbl"><table>
+<tr><th>Симптом</th><th>Что проверить</th></tr>
+<tr><td><code>apt install frr</code> не находит пакет</td><td>Нет интернета: вузовский кабель, <code>ip -br a</code>, <code>sudo dhclient -v &lt;интерфейс&gt;</code>; <code>sudo apt update</code>.</td></tr>
+<tr><td>vtysh: unknown command <code>router rip</code></td><td>Не включён ripd: <code>grep ^ripd /etc/frr/daemons</code> → <code>yes</code>, <code>sudo systemctl restart frr</code>.</td></tr>
+<tr><td>В <code>show ip route</code> нет строк <code>R</code></td><td>Подождать 30–60 с; проверить <code>version 2</code> и команды <code>network</code> (сети должны совпадать с подключёнными); пингуется ли сосед по сети B.</td></tr>
+<tr><td>Строки <code>R</code> нет, но есть <code>S</code></td><td>Остались статические маршруты — удалить через <code>no ip route …</code>.</td></tr>
+<tr><td>Соседи пингуются, ПК2 — нет</td><td><code>ip forwarding</code> на обоих маршрутизаторах; шлюз на ПК (<code>ip r</code>).</td></tr>
+<tr><td>Адрес на интерфейсе пропадает / лишний <code>169.254.x.x</code></td><td>Остался старый конфиг Netplan или интерфейсом управляет NetworkManager: перенести конфиг, <code>sudo nmcli device set &lt;интерфейс&gt; managed no</code>.</td></tr>
+<tr><td>После перезагрузки настройки пропали</td><td>Не выполнен <code>copy running-config startup-config</code>.</td></tr>
+</table></div>
+
+<h2>15. Кратко для защиты</h2>
+<ul>
+<li><b>RIP</b> — дистанционно-векторный протокол динамической маршрутизации: маршрутизаторы каждые 30 секунд рассылают соседям свою таблицу маршрутов.</li>
+<li><b>Метрика</b> — число переходов (hop count); максимум 15, 16 — сеть недостижима. Поэтому RIP подходит только для небольших сетей.</li>
+<li><b>RIPv2</b> передаёт маски подсетей (поддержка VLSM/CIDR) и использует multicast 224.0.0.9; RIPv1 масок не передаёт.</li>
+<li><b>Административное расстояние</b>: подключённая сеть — 0, статика — 1, RIP — 120. При наличии статического маршрута RIP-маршрут в ту же сеть не используется.</li>
+<li><b>Отличие от статики</b>: маршруты не прописываются вручную и перестраиваются сами при изменении сети.</li>
+<li><b>ip forwarding</b> — разрешение пересылки пакетов между интерфейсами; <b>copy running-config startup-config</b> — сохранение текущей конфигурации в <code>/etc/frr/frr.conf</code>.</li>
+</ul>
+</main>
+<script>
+// Кнопки «Копировать» для блоков команд (комментарии после # не копируются)
+document.querySelectorAll('.pre').forEach(function (box) {
+  var b = document.createElement('button');
+  b.className = 'copy'; b.textContent = 'Копировать';
+  b.onclick = function () {
+    var text = box.querySelector('pre').innerText.split('\n')
+      .map(function (l) { return l.replace(/\s+#\s.*$/, ''); }).join('\n');
+    try {
+      navigator.clipboard.writeText(text).then(function () {
+        b.textContent = 'Скопировано'; setTimeout(function () { b.textContent = 'Копировать'; }, 1500);
+      });
+    } catch (e) {}
+  };
+  box.appendChild(b);
+});
+</script>
+</body>
+</html>
