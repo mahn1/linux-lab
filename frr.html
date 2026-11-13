@@ -52,7 +52,7 @@ ol li{margin:4px 0}
 <body>
 <main>
 <h1>Маршрутизация через FRR (OSPF): ПК1 → R1 → R2 → ПК2</h1>
-<p class="sub">Лабораторная работа «Реализация сетей в Linux». Та же схема, но маршруты между R1 и R2 строит FRR по протоколу OSPF. Все шаги: от установки пакета до пинга.</p>
+<p class="sub">Лабораторная работа «Реализация сетей в Linux». Та же схема, но маршруты между R1 и R2 строит FRR по протоколу OSPF. Все шаги: от restore и установки пакета через вузовскую сеть до пинга.</p>
 <p class="sub"><a href="./">← Вариант со статическими маршрутами</a></p>
 
 
@@ -185,24 +185,49 @@ ol li{margin:4px 0}
 FRR ставится только на два компьютера-маршрутизатора (R1 и R2).
 </div>
 
-<h2>4. Установка FRR (на R1 и R2) — делать первым</h2>
-<div class="note warn">Ставить пакет нужно <b>до</b> настройки Netplan, пока у машины есть интернет. После перенастройки сети доступ в интернет может пропасть.</div>
-<div class="pre"><pre>sudo apt update
-sudo apt install -y frr</pre></div>
-<p>Проверка, что пакет установлен и служба есть:</p>
-<div class="pre"><pre>systemctl status frr --no-pager</pre></div>
-
-<h2>5. Подготовка (на всех четырёх машинах)</h2>
+<h2>4. Порядок работы</h2>
 <ol>
-<li>Подключить кабели по схеме.</li>
-<li>Проверить имена интерфейсов:
-<div class="pre"><pre>ip a</pre></div></li>
-<li>Убрать старые конфиги Netplan с теми же интерфейсами (если есть):
+<li><b>restore</b> на всех машинах (как в начале каждой лабораторной) — система возвращается в чистое состояние, FRR после этого нет.</li>
+<li>R1 и R2 по очереди (или одновременно) подключить <b>шнуром к вузовской сети</b> и поставить FRR (п. 5).</li>
+<li>Отключить вузовский шнур, <b>собрать стенд по схеме</b>, проверить, в какие интерфейсы воткнуты кабели (п. 6).</li>
+<li>Netplan → ip_forward → OSPF → проверка → пинг (п. 7–12).</li>
+</ol>
+<div class="note warn"><b>Не перезагружать машины после restore до конца работы.</b> Если restore срабатывает при перезагрузке, FRR и все настройки пропадут — придётся ставить заново.</div>
+
+<h2>5. Установка FRR через вузовский интернет (R1 и R2)</h2>
+<ol>
+<li>Воткнуть кабель вузовской сети в любой сетевой порт маршрутизатора.</li>
+<li>Посмотреть, на каком интерфейсе есть линк (<code>LOWER_UP</code> / <code>UP</code>) и получен ли адрес по DHCP:
+<div class="pre"><pre>ip -br link
+ip -br a</pre></div></li>
+<li>Проверить интернет:
+<div class="pre"><pre>ping -c 3 ya.ru</pre></div>
+Если адреса нет или пинг не идёт — запросить адрес по DHCP вручную (подставить свой интерфейс):
+<div class="pre"><pre>sudo dhclient -v enp1s0</pre></div>
+Если команды <code>dhclient</code> нет — переподключить сеть в графическом апплете XFCE (значок сети в панели) или выполнить <code>sudo netplan apply</code>.</li>
+<li>Поставить FRR:
+<div class="pre"><pre>sudo apt update
+sudo apt install -y frr</pre></div></li>
+<li>Проверить установку:
+<div class="pre"><pre>systemctl status frr --no-pager
+which vtysh</pre></div></li>
+<li>Вынуть вузовский кабель.</li>
+</ol>
+<div class="note">Если в аудитории один вузовский шнур — ставим FRR сначала на R1, потом перекладываем шнур на R2. ПК1 и ПК2 интернет не нужен.</div>
+
+<h2>6. Сборка стенда и проверка интерфейсов (все четыре машины)</h2>
+<ol>
+<li>Подключить кабели по схеме (Net 0 / Net 1 / Net 2).</li>
+<li>Убедиться, что линк есть именно на нужных интерфейсах — у них должно быть <code>UP</code>:
+<div class="pre"><pre>ip -br link</pre></div>
+Если <code>UP</code> на другом интерфейсе, чем в таблице, — кабель воткнут не в тот порт: переткнуть кабель или поменять имя интерфейса в конфиге Netplan.</li>
+<li>Убрать старые конфиги Netplan с теми же интерфейсами (после restore там может быть DHCP-конфиг):
 <div class="pre"><pre>ls /etc/netplan/
-sudo mv /etc/netplan/50-cloud-init.yaml /etc/netplan/50-cloud-init.yaml.bak</pre></div></li>
+sudo mv /etc/netplan/50-cloud-init.yaml /etc/netplan/50-cloud-init.yaml.bak</pre></div>
+Имя файла может быть другим (<code>01-network-manager-all.yaml</code> и т.п.) — переносится любой, кроме нашего <code>01-lab.yaml</code>.</li>
 </ol>
 
-<h2>6. Netplan</h2>
+<h2>7. Netplan</h2>
 <div class="grid">
 <div class="card">
 <p class="dev-title">ПК1 <small>enp4s0 · 10.0.0.1/28</small></p>
@@ -262,20 +287,23 @@ EOF</pre></div>
 <p>Применить на всех четырёх:</p>
 <div class="pre"><pre>sudo chmod 600 /etc/netplan/01-lab.yaml
 sudo netplan apply</pre></div>
+<p>Сразу проверить, что адреса встали и не потерялись при перетыкании кабелей:</p>
+<div class="pre"><pre>ip -br a</pre></div>
+<p>У каждого нужного интерфейса должны быть статус <code>UP</code> и адрес из таблицы. Если адреса нет (кабель переткнули, линк пропадал) — ещё раз <code>sudo netplan apply</code>. Если на интерфейсе висит лишний адрес вроде <code>192.168.x.x</code> или <code>169.254.x.x</code> от вузовской сети — это остатки DHCP: перенести старые конфиги Netplan (п. 6) и снова <code>sudo netplan apply</code>.</p>
 <div class="note warn">Старый Netplan не принимает <code>to: default</code> — тогда на ПК1 пишется <code>gateway4: 10.0.0.3</code>, на ПК2 <code>gateway4: 10.0.0.17</code>.</div>
 
-<h2>7. Пересылка пакетов (только R1 и R2)</h2>
+<h2>8. Пересылка пакетов (только R1 и R2)</h2>
 <div class="pre"><pre>sudo sysctl -w net.ipv4.ip_forward=1</pre></div>
 <p>Ответ <code>net.ipv4.ip_forward = 1</code> — включено. После перезагрузки выполнить снова.</p>
 
-<h2>8. Включить OSPF в FRR (R1 и R2)</h2>
+<h2>9. Включить OSPF в FRR (R1 и R2)</h2>
 <p>По умолчанию в FRR работают только служебные демоны. Включаем демон <code>ospfd</code> и перезапускаем FRR:</p>
 <div class="pre"><pre>sudo sed -i 's/^ospfd=no/ospfd=yes/' /etc/frr/daemons
 sudo systemctl restart frr
 grep ^ospfd /etc/frr/daemons</pre></div>
 <p>Последняя команда должна показать <code>ospfd=yes</code>.</p>
 
-<h2>9. Настройка OSPF</h2>
+<h2>10. Настройка OSPF</h2>
 <p>Каждый маршрутизатор объявляет в OSPF свои подключённые сети (area 0). Блок вставляется целиком — это одна команда <code>vtysh</code> с несколькими <code>-c</code>; в конце конфигурация сохраняется (<code>write memory</code> → <code>/etc/frr/frr.conf</code>).</p>
 <div class="grid">
 <div class="card">
@@ -313,7 +341,7 @@ end
 write memory
 exit</pre></div>
 
-<h2>10. Проверка OSPF (R1 и R2)</h2>
+<h2>11. Проверка OSPF (R1 и R2)</h2>
 <p>Соседство поднимается не сразу — подождать до 40 секунд.</p>
 <div class="pre"><pre>sudo vtysh -c 'show ip ospf neighbor'</pre></div>
 <p>Должен быть виден сосед (на R1 — <code>2.2.2.2</code>, на R2 — <code>1.1.1.1</code>) в состоянии <code>Full</code>.</p>
@@ -332,7 +360,7 @@ ip r</pre></div>
 </div>
 <p>Значение <code>metric</code> может отличаться — главное, что строка с <code>via</code> и <code>proto ospf</code> есть.</p>
 
-<h2>11. Пинг</h2>
+<h2>12. Пинг</h2>
 <p>С ПК1 по цепочке:</p>
 <div class="pre"><pre>ping -c 3 10.0.0.3     # R1, вход
 ping -c 3 10.0.0.26    # R2, вход
@@ -340,10 +368,10 @@ ping -c 3 10.0.0.19    # ПК2 — цель</pre></div>
 <div class="pre"><pre>tracepath 10.0.0.19</pre></div>
 <p>Прыжки: <code>10.0.0.3</code> → <code>10.0.0.26</code> → <code>10.0.0.19</code>. Обратно — с ПК2: <code>ping -c 3 10.0.0.1</code>.</p>
 
-<h2>12. Если не работает</h2>
+<h2>13. Если не работает</h2>
 <div class="tbl"><table>
 <tr><th>Симптом</th><th>Что проверить</th></tr>
-<tr><td><code>apt install frr</code>: пакет не найден / нет сети</td><td>Нет интернета или не выполнен <code>sudo apt update</code>. Ставить до перенастройки Netplan.</td></tr>
+<tr><td><code>apt install frr</code>: пакет не найден / нет сети</td><td>Вузовский кабель не в том порту или нет адреса по DHCP (п. 5): <code>ip -br a</code>, <code>sudo dhclient -v &lt;интерфейс&gt;</code>; не забыть <code>sudo apt update</code>.</td></tr><tr><td>После перетыкания кабелей пропал IP</td><td><code>sudo netplan apply</code> и снова <code>ip -br a</code>. Если адрес опять пропадает — интерфейсом управляет NetworkManager из старого конфига: перенести его из <code>/etc/netplan/</code> (п. 6).</td></tr><tr><td>FRR пропал, <code>vtysh</code> не найден</td><td>Машину перезагрузили и сработал restore — поставить FRR заново (п. 5).</td></tr>
 <tr><td><code>vtysh</code>: unknown command <code>router ospf</code></td><td>Демон ospfd не включён: <code>grep ^ospfd /etc/frr/daemons</code> → <code>yes</code>, затем <code>sudo systemctl restart frr</code>.</td></tr>
 <tr><td>В <code>show ip ospf neighbor</code> пусто</td><td>Не пингуется сосед по сети B (10.0.0.25 ↔ 10.0.0.26) — кабель/адреса; в <code>network</code> не та подсеть; файрвол (<code>sudo ufw disable</code> на время работы).</td></tr>
 <tr><td>Сосед Full, но маршрута <code>proto ospf</code> нет</td><td>Чужая сеть не объявлена командой <code>network</code> на соседнем маршрутизаторе.</td></tr>
@@ -351,7 +379,7 @@ ping -c 3 10.0.0.19    # ПК2 — цель</pre></div>
 <tr><td>После перезагрузки всё пропало</td><td>Повторить <code>sysctl -w</code>; если OSPF пропал — не был выполнен <code>write memory</code>.</td></tr>
 </table></div>
 
-<h2>13. Кратко для защиты</h2>
+<h2>14. Кратко для защиты</h2>
 <ul>
 <li><b>FRR</b> — пакет динамической маршрутизации для Linux (OSPF, BGP, RIP и др.); <code>zebra</code> передаёт найденные маршруты в ядро, <code>ospfd</code> работает по OSPF, <code>vtysh</code> — общая консоль настройки.</li>
 <li><b>OSPF</b> — протокол состояния каналов: маршрутизаторы находят соседей, обмениваются сведениями о сетях и сами строят таблицу маршрутов.</li>
