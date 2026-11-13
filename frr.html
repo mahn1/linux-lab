@@ -3,59 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Маршрутизация через FRR</title>
-<style>
-:root{
-  --bg:#f6f7f9; --card:#ffffff; --text:#1d2330; --muted:#5d6675; --line:#d9dee6;
-  --code:#f1f3f6; --accent:#2f6fde;
-  --n28:#2f6fde; --n30:#e07b12; --n29:#1f9d55; --dev:#eef2f8; --devstroke:#7a8699;
-}
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){
-    --bg:#14171c; --card:#1c2027; --text:#e6e9ee; --muted:#9aa3b2; --line:#323946;
-    --code:#242a33; --accent:#6c9cff;
-    --n28:#6c9cff; --n30:#ffa64d; --n29:#4fd18b; --dev:#262c36; --devstroke:#7d889b;
-  }
-}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--text);font:16px/1.55 "Segoe UI",Roboto,Arial,sans-serif}
-main{max-width:1060px;margin:0 auto;padding:24px 16px 60px}
-h1{font-size:28px;margin:0 0 4px}
-h2{font-size:21px;margin:34px 0 10px;padding-top:6px;border-top:1px solid var(--line)}
-h3{font-size:17px;margin:20px 0 6px}
-.sub{color:var(--muted);margin:0 0 18px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin:12px 0}
-table{border-collapse:collapse;width:100%;font-size:15px}
-th,td{border:1px solid var(--line);padding:6px 9px;text-align:left}
-th{background:var(--code)}
-.tbl{overflow-x:auto}
-code{background:var(--code);padding:1px 5px;border-radius:4px;font-family:Consolas,"Cascadia Mono",monospace;font-size:14px}
-.pre{position:relative;margin:8px 0}
-pre{background:var(--code);border:1px solid var(--line);border-radius:8px;padding:12px 14px;overflow-x:auto;margin:0;
-    font-family:Consolas,"Cascadia Mono",monospace;font-size:14px;line-height:1.45}
-.copy{position:absolute;top:6px;right:6px;font-size:12px;padding:3px 8px;border:1px solid var(--line);
-      border-radius:5px;background:var(--card);color:var(--muted);cursor:pointer}
-.copy:hover{color:var(--text)}
-.dot{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:5px;vertical-align:middle}
-.note{border-left:4px solid var(--accent);background:var(--code);padding:10px 14px;border-radius:6px;margin:12px 0}
-.warn{border-left-color:var(--n30)}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
-.dev-title{font-weight:600;margin:0 0 4px}
-.dev-title small{color:var(--muted);font-weight:400}
-svg{width:100%;height:auto;display:block}
-svg text{fill:var(--text);font-family:"Segoe UI",Roboto,Arial,sans-serif}
-svg .muted{fill:var(--muted)}
-ol li{margin:4px 0}
-@media print{.copy{display:none}body{background:#fff}}
-</style>
+<title>Часть 3 · Статическая маршрутизация с FRR</title>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
 <main>
-<h1>Маршрутизация через FRR (OSPF): ПК1 → R1 → R2 → ПК2</h1>
-<p class="sub">Лабораторная работа «Реализация сетей в Linux». Та же схема, но маршруты между R1 и R2 строит FRR по протоколу OSPF. Все шаги: от restore и установки пакета через вузовскую сеть до пинга.</p>
-<p class="sub"><a href="./">← Вариант со статическими маршрутами</a></p>
-
-
+<nav class="topbar"><a class="brand" href="./">Linux<span>Lab</span></a><a href="./">Библиотека</a> <a href="static.html">Статика · Netplan</a> <b>Статика · FRR</b></nav>
+<h1>Часть 3. Статическая маршрутизация <span class="red">с пакетом FRR</span></h1>
+<p class="sub">Реализация сетей в Linux. Все настройки — в консоли vtysh на четырёх машинах, по пунктам методички: от timeshift --restore до перезагрузки и проверки.</p>
 <h2>1. Схема стенда</h2>
 <div class="card">
 <svg viewBox="0 0 1000 560" role="img" aria-label="Схема: ПК1, маршрутизаторы R1 и R2, ПК2, все кабели подключены к коммутатору">
@@ -94,9 +49,9 @@ ol li{margin:4px 0}
   <text x="110" y="137" text-anchor="middle" font-size="17" font-weight="700">ПК1</text>
   <text x="110" y="157" text-anchor="middle" font-size="12" class="muted">шлюз 10.0.0.3</text>
   <text x="390" y="137" text-anchor="middle" font-size="17" font-weight="700">R1</text>
-  <text x="390" y="157" text-anchor="middle" font-size="12" class="muted">FRR · OSPF</text>
+  <text x="390" y="157" text-anchor="middle" font-size="12" class="muted">FRR · static</text>
   <text x="610" y="137" text-anchor="middle" font-size="17" font-weight="700">R2</text>
-  <text x="610" y="157" text-anchor="middle" font-size="12" class="muted">FRR · OSPF</text>
+  <text x="610" y="157" text-anchor="middle" font-size="12" class="muted">FRR · static</text>
   <text x="890" y="137" text-anchor="middle" font-size="17" font-weight="700">ПК2</text>
   <text x="890" y="157" text-anchor="middle" font-size="12" class="muted">шлюз 10.0.0.17</text>
 
@@ -160,13 +115,13 @@ ol li{margin:4px 0}
 
 <h2>2. Таблица адресации</h2>
 <div class="tbl"><table>
-<tr><th>Устройство</th><th>Кабель</th><th>Интерфейс</th><th>IP / маска</th><th>Сеть</th><th>Шлюз / маршрутизация</th></tr>
-<tr><td>ПК1</td><td>Net 0</td><td>enp4s0</td><td>10.0.0.1/28</td><td>A</td><td>default via 10.0.0.3</td></tr>
+<tr><th>Устройство</th><th>Кабель</th><th>Интерфейс</th><th>IP / маска</th><th>Сеть</th><th>Команда маршрута в vtysh</th></tr>
+<tr><td>ПК1</td><td>Net 0</td><td>enp4s0</td><td>10.0.0.1/28</td><td>A</td><td><code>ip route 0.0.0.0/0 10.0.0.3</code></td></tr>
 <tr><td rowspan="2">R1</td><td>Net 1</td><td>enp1s0</td><td>10.0.0.3/28</td><td>A</td><td>—</td></tr>
-<tr><td>Net 0</td><td>enp4s0</td><td>10.0.0.25/30</td><td>B</td><td>OSPF (FRR): узнаёт 10.0.0.16/29</td></tr>
-<tr><td rowspan="2">R2</td><td>Net 1</td><td>enp1s0</td><td>10.0.0.26/30</td><td>B</td><td>OSPF (FRR): узнаёт 10.0.0.0/28</td></tr>
+<tr><td>Net 0</td><td>enp4s0</td><td>10.0.0.25/30</td><td>B</td><td><code>ip route 10.0.0.16/29 10.0.0.26</code></td></tr>
+<tr><td rowspan="2">R2</td><td>Net 1</td><td>enp1s0</td><td>10.0.0.26/30</td><td>B</td><td><code>ip route 10.0.0.0/28 10.0.0.25</code></td></tr>
 <tr><td>Net 2</td><td>enp3s0</td><td>10.0.0.17/29</td><td>C</td><td>—</td></tr>
-<tr><td>ПК2</td><td>Net 1</td><td>enp1s0</td><td>10.0.0.19/29</td><td>C</td><td>default via 10.0.0.17</td></tr>
+<tr><td>ПК2</td><td>Net 1</td><td>enp1s0</td><td>10.0.0.19/29</td><td>C</td><td><code>ip route 0.0.0.0/0 10.0.0.17</code></td></tr>
 </table></div>
 
 <h3>Расчёт подсетей</h3>
@@ -178,214 +133,256 @@ ol li{margin:4px 0}
 </table></div>
 <p>Подсети не пересекаются: 0–15, 16–23, 24–27. Сеть /30 между маршрутизаторами — ровно на два адреса, по одному на каждый конец канала.</p>
 
-<h2>3. Что меняется по сравнению со статикой</h2>
+<h2>3. Порядок работы</h2>
 <div class="note">
-<b>ПК1 и ПК2</b> — настраиваются так же: адрес + шлюз по умолчанию.<br>
-<b>R1 и R2</b> — в Netplan только адреса, <b>без</b> блока <code>routes</code>. Маршруты в чужие сети маршрутизаторы узнают друг от друга сами по протоколу <b>OSPF</b>, который запускает пакет <b>FRR</b>.<br>
-FRR ставится только на два компьютера-маршрутизатора (R1 и R2).
+По методичке <b>FRR ставится на все четыре машины</b>: IP-адреса, маршрут по умолчанию на рабочих станциях, статические маршруты и включение маршрутизации — всё делается в консоли FRR <code>vtysh</code>. Netplan в этой части не используется.
 </div>
-
-<h2>4. Порядок работы</h2>
 <ol>
-<li><b>restore</b> на всех машинах (как в начале каждой лабораторной) — система возвращается в чистое состояние, FRR после этого нет.</li>
-<li>R1 и R2 по очереди (или одновременно) подключить <b>шнуром к вузовской сети</b> и поставить FRR (п. 5).</li>
-<li>Отключить вузовский шнур, <b>собрать стенд по схеме</b>, проверить, в какие интерфейсы воткнуты кабели (п. 6).</li>
-<li>Netplan → ip_forward → OSPF → проверка → пинг (п. 7–12).</li>
+<li><span class="step">0</span>Restore на всех машинах.</li>
+<li><span class="step">0</span>Через вузовскую сеть поставить <code>frr</code> на все 4 машины, вынуть вузовский шнур, собрать стенд.</li>
+<li><span class="step">1–2</span>В <code>vtysh</code> назначить IP-адреса интерфейсам.</li>
+<li><span class="step">3</span>Пропинговать ближайших соседей.</li>
+<li><span class="step">4</span>На рабочих станциях — маршрут по умолчанию.</li>
+<li><span class="step">8</span>На маршрутизаторах — статические маршруты.</li>
+<li><span class="step">9</span>Включить маршрутизацию (<code>ip forwarding</code>).</li>
+<li><span class="step">10</span>Проверить <code>ping</code> и <code>traceroute</code>: ПК1 и ПК2 пингуют друг друга.</li>
+<li><span class="step">11</span>Сохранить: <code>copy running-config startup-config</code>.</li>
+<li><span class="step">12</span>Перезагрузиться и проверить, что всё работает.</li>
 </ol>
-<div class="note warn"><b>Не перезагружать машины после restore до конца работы.</b> Если restore срабатывает при перезагрузке, FRR и все настройки пропадут — придётся ставить заново.</div>
 
-<h2>5. Установка FRR через вузовский интернет (R1 и R2)</h2>
+<h2>4. Restore (все машины)</h2>
+<div class="pre"><pre>sudo timeshift --restore</pre></div>
+<p>Timeshift спросит, какой снимок восстановить, и попросит подтверждение — выбрать снимок, который используется на стенде, и подтвердить. После восстановления система перезагружается.</p>
+
+<h2>5. Установка FRR (все машины, через вузовскую сеть)</h2>
 <ol>
-<li>Воткнуть кабель вузовской сети в любой сетевой порт маршрутизатора.</li>
-<li>Посмотреть, на каком интерфейсе есть линк (<code>LOWER_UP</code> / <code>UP</code>) и получен ли адрес по DHCP:
-<div class="pre"><pre>ip -br link
-ip -br a</pre></div></li>
-<li>Проверить интернет:
-<div class="pre"><pre>ping -c 3 ya.ru</pre></div>
-Если адреса нет или пинг не идёт — запросить адрес по DHCP вручную (подставить свой интерфейс):
-<div class="pre"><pre>sudo dhclient -v enp1s0</pre></div>
-Если команды <code>dhclient</code> нет — переподключить сеть в графическом апплете XFCE (значок сети в панели) или выполнить <code>sudo netplan apply</code>.</li>
-<li>Поставить FRR:
+<li>Воткнуть кабель вузовской сети в машину, проверить адрес и интернет:
+<div class="pre"><pre>ip -br a
+ping -c 3 ya.ru</pre></div>
+Если адреса нет — запросить по DHCP (подставить свой интерфейс): <code>sudo dhclient -v enp1s0</code>.</li>
+<li>Поставить FRR и traceroute (traceroute понадобится в п. 10, после отключения интернета его уже не поставить):
 <div class="pre"><pre>sudo apt update
-sudo apt install -y frr</pre></div></li>
-<li>Проверить установку:
-<div class="pre"><pre>systemctl status frr --no-pager
-which vtysh</pre></div></li>
-<li>Вынуть вузовский кабель.</li>
+sudo apt install -y frr traceroute</pre></div></li>
+<li>Проверить, что FRR запущен:
+<div class="pre"><pre>systemctl status frr --no-pager</pre></div></li>
+<li>Вынуть вузовский кабель, переложить его на следующую машину. Когда FRR стоит на всех 4 — собрать стенд по схеме.</li>
 </ol>
-<div class="note">Если в аудитории один вузовский шнур — ставим FRR сначала на R1, потом перекладываем шнур на R2. ПК1 и ПК2 интернет не нужен.</div>
+<div class="note">Для статических маршрутов отдельные демоны включать не нужно: <code>zebra</code> (интерфейсы, адреса, forwarding) и <code>staticd</code> (команда <code>ip route</code>) запускаются в FRR всегда.</div>
 
-<h2>6. Сборка стенда и проверка интерфейсов (все четыре машины)</h2>
-<ol>
-<li>Подключить кабели по схеме (Net 0 / Net 1 / Net 2).</li>
-<li>Убедиться, что линк есть именно на нужных интерфейсах — у них должно быть <code>UP</code>:
+<h2>6. Проверка кабелей (все машины)</h2>
 <div class="pre"><pre>ip -br link</pre></div>
-Если <code>UP</code> на другом интерфейсе, чем в таблице, — кабель воткнут не в тот порт: переткнуть кабель или поменять имя интерфейса в конфиге Netplan.</li>
-<li>Убрать старые конфиги Netplan с теми же интерфейсами (после restore там может быть DHCP-конфиг):
-<div class="pre"><pre>ls /etc/netplan/
-sudo mv /etc/netplan/50-cloud-init.yaml /etc/netplan/50-cloud-init.yaml.bak</pre></div>
-Имя файла может быть другим (<code>01-network-manager-all.yaml</code> и т.п.) — переносится любой, кроме нашего <code>01-lab.yaml</code>.</li>
-</ol>
+<p>Статус <code>UP</code> должен быть на интерфейсах из таблицы. Если <code>UP</code> на другом интерфейсе — кабель не в том порту: переткнуть его (или использовать в <code>vtysh</code> фактическое имя интерфейса).</p>
 
-<h2>7. Netplan</h2>
+<h2>7. Пункты 1–2. Назначение IP-адресов в vtysh</h2>
+<p>Вход в консоль FRR и режим настройки (<code>config</code> = <code>configure terminal</code>):</p>
 <div class="grid">
 <div class="card">
-<p class="dev-title">ПК1 <small>enp4s0 · 10.0.0.1/28</small></p>
-<div class="pre"><pre>sudo tee /etc/netplan/01-lab.yaml &gt; /dev/null &lt;&lt;'EOF'
-network:
-  version: 2
-  renderer: networkd
-  ethernets:
-    enp4s0:
-      addresses: [10.0.0.1/28]
-      routes:
-        - to: default
-          via: 10.0.0.3
-EOF</pre></div>
-</div>
-<div class="card">
-<p class="dev-title">ПК2 <small>enp1s0 · 10.0.0.19/29</small></p>
-<div class="pre"><pre>sudo tee /etc/netplan/01-lab.yaml &gt; /dev/null &lt;&lt;'EOF'
-network:
-  version: 2
-  renderer: networkd
-  ethernets:
-    enp1s0:
-      addresses: [10.0.0.19/29]
-      routes:
-        - to: default
-          via: 10.0.0.17
-EOF</pre></div>
-</div>
-<div class="card">
-<p class="dev-title">R1 <small>только адреса, без routes</small></p>
-<div class="pre"><pre>sudo tee /etc/netplan/01-lab.yaml &gt; /dev/null &lt;&lt;'EOF'
-network:
-  version: 2
-  renderer: networkd
-  ethernets:
-    enp1s0:
-      addresses: [10.0.0.3/28]
-    enp4s0:
-      addresses: [10.0.0.25/30]
-EOF</pre></div>
-</div>
-<div class="card">
-<p class="dev-title">R2 <small>только адреса, без routes</small></p>
-<div class="pre"><pre>sudo tee /etc/netplan/01-lab.yaml &gt; /dev/null &lt;&lt;'EOF'
-network:
-  version: 2
-  renderer: networkd
-  ethernets:
-    enp1s0:
-      addresses: [10.0.0.26/30]
-    enp3s0:
-      addresses: [10.0.0.17/29]
-EOF</pre></div>
-</div>
-</div>
-<p>Применить на всех четырёх:</p>
-<div class="pre"><pre>sudo chmod 600 /etc/netplan/01-lab.yaml
-sudo netplan apply</pre></div>
-<p>Сразу проверить, что адреса встали и не потерялись при перетыкании кабелей:</p>
-<div class="pre"><pre>ip -br a</pre></div>
-<p>У каждого нужного интерфейса должны быть статус <code>UP</code> и адрес из таблицы. Если адреса нет (кабель переткнули, линк пропадал) — ещё раз <code>sudo netplan apply</code>. Если на интерфейсе висит лишний адрес вроде <code>192.168.x.x</code> или <code>169.254.x.x</code> от вузовской сети — это остатки DHCP: перенести старые конфиги Netplan (п. 6) и снова <code>sudo netplan apply</code>.</p>
-<div class="note warn">Старый Netplan не принимает <code>to: default</code> — тогда на ПК1 пишется <code>gateway4: 10.0.0.3</code>, на ПК2 <code>gateway4: 10.0.0.17</code>.</div>
-
-<h2>8. Пересылка пакетов (только R1 и R2)</h2>
-<div class="pre"><pre>sudo sysctl -w net.ipv4.ip_forward=1</pre></div>
-<p>Ответ <code>net.ipv4.ip_forward = 1</code> — включено. После перезагрузки выполнить снова.</p>
-
-<h2>9. Включить OSPF в FRR (R1 и R2)</h2>
-<p>По умолчанию в FRR работают только служебные демоны. Включаем демон <code>ospfd</code> и перезапускаем FRR:</p>
-<div class="pre"><pre>sudo sed -i 's/^ospfd=no/ospfd=yes/' /etc/frr/daemons
-sudo systemctl restart frr
-grep ^ospfd /etc/frr/daemons</pre></div>
-<p>Последняя команда должна показать <code>ospfd=yes</code>.</p>
-
-<h2>10. Настройка OSPF</h2>
-<p>Каждый маршрутизатор объявляет в OSPF свои подключённые сети (area 0). Блок вставляется целиком — это одна команда <code>vtysh</code> с несколькими <code>-c</code>; в конце конфигурация сохраняется (<code>write memory</code> → <code>/etc/frr/frr.conf</code>).</p>
-<div class="grid">
-<div class="card">
-<p class="dev-title">R1 <small>сети A и B</small></p>
-<div class="pre"><pre>sudo vtysh \
-  -c 'configure terminal' \
-  -c 'router ospf' \
-  -c 'ospf router-id 1.1.1.1' \
-  -c 'network 10.0.0.0/28 area 0' \
-  -c 'network 10.0.0.24/30 area 0' \
-  -c 'end' \
-  -c 'write memory'</pre></div>
-</div>
-<div class="card">
-<p class="dev-title">R2 <small>сети B и C</small></p>
-<div class="pre"><pre>sudo vtysh \
-  -c 'configure terminal' \
-  -c 'router ospf' \
-  -c 'ospf router-id 2.2.2.2' \
-  -c 'network 10.0.0.24/30 area 0' \
-  -c 'network 10.0.0.16/29 area 0' \
-  -c 'end' \
-  -c 'write memory'</pre></div>
-</div>
-</div>
-<h3>То же самое вручную в консоли vtysh</h3>
-<p>Если преподаватель хочет видеть ввод по шагам (на примере R1):</p>
+<p class="dev-title">ПК1</p>
 <div class="pre"><pre>sudo vtysh
-configure terminal
-router ospf
-ospf router-id 1.1.1.1
-network 10.0.0.0/28 area 0
-network 10.0.0.24/30 area 0
-end
-write memory
-exit</pre></div>
-
-<h2>11. Проверка OSPF (R1 и R2)</h2>
-<p>Соседство поднимается не сразу — подождать до 40 секунд.</p>
-<div class="pre"><pre>sudo vtysh -c 'show ip ospf neighbor'</pre></div>
-<p>Должен быть виден сосед (на R1 — <code>2.2.2.2</code>, на R2 — <code>1.1.1.1</code>) в состоянии <code>Full</code>.</p>
-<div class="pre"><pre>sudo vtysh -c 'show ip route ospf'
-ip r</pre></div>
-<p>В <code>ip r</code> на маршрутизаторе снова три строки, но маршрут в чужую сеть помечен <code>proto ospf</code>:</p>
-<div class="grid">
-<div class="card"><p class="dev-title">R1 — <code>ip r</code></p>
-<pre>10.0.0.0/28 dev enp1s0 proto kernel scope link src 10.0.0.3
-10.0.0.16/29 via 10.0.0.26 dev enp4s0 proto ospf metric 20
-10.0.0.24/30 dev enp4s0 proto kernel scope link src 10.0.0.25</pre></div>
-<div class="card"><p class="dev-title">R2 — <code>ip r</code></p>
-<pre>10.0.0.0/28 via 10.0.0.25 dev enp1s0 proto ospf metric 20
-10.0.0.16/29 dev enp3s0 proto kernel scope link src 10.0.0.17
-10.0.0.24/30 dev enp1s0 proto kernel scope link src 10.0.0.26</pre></div>
+config
+interface enp4s0
+ip address 10.0.0.1/28
+exit
+end</pre></div>
 </div>
-<p>Значение <code>metric</code> может отличаться — главное, что строка с <code>via</code> и <code>proto ospf</code> есть.</p>
+<div class="card">
+<p class="dev-title">ПК2</p>
+<div class="pre"><pre>sudo vtysh
+config
+interface enp1s0
+ip address 10.0.0.19/29
+exit
+end</pre></div>
+</div>
+<div class="card">
+<p class="dev-title">R1</p>
+<div class="pre"><pre>sudo vtysh
+config
+interface enp1s0
+ip address 10.0.0.3/28
+exit
+interface enp4s0
+ip address 10.0.0.25/30
+exit
+end</pre></div>
+</div>
+<div class="card">
+<p class="dev-title">R2</p>
+<div class="pre"><pre>sudo vtysh
+config
+interface enp1s0
+ip address 10.0.0.26/30
+exit
+interface enp3s0
+ip address 10.0.0.17/29
+exit
+end</pre></div>
+</div>
+</div>
+<p>Проверка (из <code>vtysh</code>): адреса и состояние интерфейсов.</p>
+<div class="pre"><pre>show interface brief</pre></div>
+<div class="note warn">Консоль <code>vtysh</code> можно не закрывать — все дальнейшие команды вводятся в ней же. Чтобы выполнить обычную команду Linux (<code>ping</code>), откройте второй терминал или выйдите из vtysh командой <code>exit</code>.</div>
 
-<h2>12. Пинг</h2>
-<p>С ПК1 по цепочке:</p>
-<div class="pre"><pre>ping -c 3 10.0.0.3     # R1, вход
-ping -c 3 10.0.0.26    # R2, вход
-ping -c 3 10.0.0.19    # ПК2 — цель</pre></div>
-<div class="pre"><pre>tracepath 10.0.0.19</pre></div>
-<p>Прыжки: <code>10.0.0.3</code> → <code>10.0.0.26</code> → <code>10.0.0.19</code>. Обратно — с ПК2: <code>ping -c 3 10.0.0.1</code>.</p>
-
-<h2>13. Если не работает</h2>
+<h2>8. Пункт 3. Пинг ближайших соседей</h2>
+<p>В обычном терминале (не в vtysh):</p>
 <div class="tbl"><table>
-<tr><th>Симптом</th><th>Что проверить</th></tr>
-<tr><td><code>apt install frr</code>: пакет не найден / нет сети</td><td>Вузовский кабель не в том порту или нет адреса по DHCP (п. 5): <code>ip -br a</code>, <code>sudo dhclient -v &lt;интерфейс&gt;</code>; не забыть <code>sudo apt update</code>.</td></tr><tr><td>После перетыкания кабелей пропал IP</td><td><code>sudo netplan apply</code> и снова <code>ip -br a</code>. Если адрес опять пропадает — интерфейсом управляет NetworkManager из старого конфига: перенести его из <code>/etc/netplan/</code> (п. 6).</td></tr><tr><td>FRR пропал, <code>vtysh</code> не найден</td><td>Машину перезагрузили и сработал restore — поставить FRR заново (п. 5).</td></tr>
-<tr><td><code>vtysh</code>: unknown command <code>router ospf</code></td><td>Демон ospfd не включён: <code>grep ^ospfd /etc/frr/daemons</code> → <code>yes</code>, затем <code>sudo systemctl restart frr</code>.</td></tr>
-<tr><td>В <code>show ip ospf neighbor</code> пусто</td><td>Не пингуется сосед по сети B (10.0.0.25 ↔ 10.0.0.26) — кабель/адреса; в <code>network</code> не та подсеть; файрвол (<code>sudo ufw disable</code> на время работы).</td></tr>
-<tr><td>Сосед Full, но маршрута <code>proto ospf</code> нет</td><td>Чужая сеть не объявлена командой <code>network</code> на соседнем маршрутизаторе.</td></tr>
-<tr><td>Маршруты есть, пинг до ПК2 не идёт</td><td><code>ip_forward</code> на R1/R2, шлюз и маска на ПК (<code>ip r</code>).</td></tr>
-<tr><td>После перезагрузки всё пропало</td><td>Повторить <code>sysctl -w</code>; если OSPF пропал — не был выполнен <code>write memory</code>.</td></tr>
+<tr><th>С машины</th><th>Команда</th><th>Кого проверяем</th></tr>
+<tr><td>ПК1</td><td><code>ping -c 3 10.0.0.3</code></td><td>R1 (сеть A)</td></tr>
+<tr><td>R1</td><td><code>ping -c 3 10.0.0.1</code> и <code>ping -c 3 10.0.0.26</code></td><td>ПК1 и R2</td></tr>
+<tr><td>R2</td><td><code>ping -c 3 10.0.0.25</code> и <code>ping -c 3 10.0.0.19</code></td><td>R1 и ПК2</td></tr>
+<tr><td>ПК2</td><td><code>ping -c 3 10.0.0.17</code></td><td>R2 (сеть C)</td></tr>
+</table></div>
+<p>Все соседи должны отвечать. Если нет — кабель, порт или адрес (п. 6–7). Дальние узлы на этом шаге ещё <b>не</b> пингуются — маршрутов пока нет.</p>
+
+<h2>9. Пункт 4. Маршрут по умолчанию на рабочих станциях</h2>
+<div class="grid">
+<div class="card">
+<p class="dev-title">ПК1 <small>шлюз — R1</small></p>
+<div class="pre"><pre>sudo vtysh
+conf
+ip route 0.0.0.0/0 10.0.0.3
+end</pre></div>
+</div>
+<div class="card">
+<p class="dev-title">ПК2 <small>шлюз — R2</small></p>
+<div class="pre"><pre>sudo vtysh
+conf
+ip route 0.0.0.0/0 10.0.0.17
+end</pre></div>
+</div>
+</div>
+
+<h2>10. Пункт 8. Статические маршруты на маршрутизаторах</h2>
+<p>Каждому маршрутизатору нужен маршрут в ту сеть, к которой он не подключён: <code>ip route &lt;сеть/маска&gt; &lt;IP следующего маршрутизатора&gt;</code>.</p>
+<div class="grid">
+<div class="card">
+<p class="dev-title">R1 <small>сеть C — через R2</small></p>
+<div class="pre"><pre>sudo vtysh
+conf
+ip route 10.0.0.16/29 10.0.0.26
+end</pre></div>
+</div>
+<div class="card">
+<p class="dev-title">R2 <small>сеть A — через R1</small></p>
+<div class="pre"><pre>sudo vtysh
+conf
+ip route 10.0.0.0/28 10.0.0.25
+end</pre></div>
+</div>
+</div>
+
+<h2>11. Пункт 9. Включение маршрутизации (R1 и R2)</h2>
+<div class="pre"><pre>sudo vtysh
+conf
+ip forwarding
+end</pre></div>
+<p>Проверка: в <code>show running-config</code> есть строка <code>ip forwarding</code> (или в Linux: <code>cat /proc/sys/net/ipv4/ip_forward</code> → <code>1</code>).</p>
+
+<h2>12. Пункт 10. Проверка: ping и traceroute</h2>
+<p>Таблица маршрутизации в vtysh — <code>show ip route</code>. Пример для R1 (формат может немного отличаться):</p>
+<div class="grid">
+<div class="card"><p class="dev-title">R1 — <code>show ip route</code></p>
+<pre>C&gt;* 10.0.0.0/28 is directly connected, enp1s0
+S&gt;* 10.0.0.16/29 [1/0] via 10.0.0.26, enp4s0
+C&gt;* 10.0.0.24/30 is directly connected, enp4s0</pre></div>
+<div class="card"><p class="dev-title">R2 — <code>show ip route</code></p>
+<pre>S&gt;* 10.0.0.0/28 [1/0] via 10.0.0.25, enp1s0
+C&gt;* 10.0.0.16/29 is directly connected, enp3s0
+C&gt;* 10.0.0.24/30 is directly connected, enp1s0</pre></div>
+</div>
+<p><code>C</code> — подключённая сеть, <code>S</code> — статический маршрут, <code>&gt;*</code> — маршрут выбран и установлен в ядро. На ПК должна быть строка <code>S&gt;* 0.0.0.0/0 … via &lt;шлюз&gt;</code>.</p>
+<p>Конечная цель — рабочие станции пингуют друг друга. В обычном терминале:</p>
+<div class="grid">
+<div class="card"><p class="dev-title">С ПК1</p>
+<div class="pre"><pre>ping -c 3 10.0.0.19
+traceroute 10.0.0.19</pre></div>
+<p>Прыжки: 10.0.0.3 → 10.0.0.26 → 10.0.0.19</p></div>
+<div class="card"><p class="dev-title">С ПК2</p>
+<div class="pre"><pre>ping -c 3 10.0.0.1
+traceroute 10.0.0.1</pre></div>
+<p>Прыжки: 10.0.0.17 → 10.0.0.25 → 10.0.0.1</p></div>
+</div>
+
+<h2>13. Пункт 11. Сохранение (все машины)</h2>
+<div class="pre"><pre>sudo vtysh
+copy running-config startup-config</pre></div>
+<p>Команда вводится в привилегированном режиме (не внутри <code>conf</code> — сначала <code>end</code>). Настройки записываются в <code>/etc/frr/frr.conf</code>.</p>
+
+<h2>14. Пункт 12. Перезагрузка и проверка</h2>
+<div class="pre"><pre>sudo reboot</pre></div>
+<p>После загрузки на каждой машине:</p>
+<div class="pre"><pre>sudo vtysh -c 'show running-config'
+sudo vtysh -c 'show ip route'</pre></div>
+<p>и снова <code>ping</code> ПК1 ↔ ПК2. Если что-то не поднялось — поправить <code>/etc/frr/frr.conf</code> и перезапустить FRR:</p>
+<div class="pre"><pre>sudo nano /etc/frr/frr.conf
+sudo systemctl restart frr</pre></div>
+<p>Примерное содержимое <code>/etc/frr/frr.conf</code> (порядок строк и служебные строки в начале могут отличаться):</p>
+<div class="grid">
+<div class="card"><p class="dev-title">R1</p>
+<pre>ip forwarding
+!
+interface enp1s0
+ ip address 10.0.0.3/28
+exit
+!
+interface enp4s0
+ ip address 10.0.0.25/30
+exit
+!
+ip route 10.0.0.16/29 10.0.0.26</pre></div>
+<div class="card"><p class="dev-title">R2</p>
+<pre>ip forwarding
+!
+interface enp1s0
+ ip address 10.0.0.26/30
+exit
+!
+interface enp3s0
+ ip address 10.0.0.17/29
+exit
+!
+ip route 10.0.0.0/28 10.0.0.25</pre></div>
+<div class="card"><p class="dev-title">ПК1</p>
+<pre>interface enp4s0
+ ip address 10.0.0.1/28
+exit
+!
+ip route 0.0.0.0/0 10.0.0.3</pre></div>
+<div class="card"><p class="dev-title">ПК2</p>
+<pre>interface enp1s0
+ ip address 10.0.0.19/29
+exit
+!
+ip route 0.0.0.0/0 10.0.0.17</pre></div>
+</div>
+
+<h2>15. Команды диагностики</h2>
+<div class="tbl"><table>
+<tr><th>Команда (в vtysh)</th><th>Что показывает</th></tr>
+<tr><td><code>show ip route</code></td><td>Таблица маршрутизации FRR</td></tr>
+<tr><td><code>show running-config</code></td><td>Текущая конфигурация (адреса, маршруты, ip forwarding)</td></tr>
+<tr><td><code>show interface brief</code></td><td>Интерфейсы, их состояние и адреса</td></tr>
 </table></div>
 
-<h2>14. Кратко для защиты</h2>
+<h2>16. Если не работает</h2>
+<div class="tbl"><table>
+<tr><th>Симптом</th><th>Что проверить</th></tr>
+<tr><td><code>apt install frr</code> не находит пакет</td><td>Нет интернета (вузовский кабель, <code>ip -br a</code>, <code>sudo dhclient -v &lt;интерфейс&gt;</code>) или не сделан <code>sudo apt update</code>.</td></tr>
+<tr><td>Не пингуется сосед (п. 3)</td><td><code>ip -br link</code> — есть ли <code>UP</code>; адрес и маска в <code>show interface brief</code>; кабель в нужном порту.</td></tr>
+<tr><td>Адрес из vtysh пропадает или рядом висит лишний <code>169.254.x.x</code></td><td>Интерфейсом после restore управляет NetworkManager: <code>sudo nmcli device set enp1s0 managed no</code> (свой интерфейс), затем снова назначить адрес в vtysh.</td></tr>
+<tr><td>Соседи пингуются, дальние — нет</td><td><code>show ip route</code>: есть ли <code>S&gt;*</code> маршруты; <code>ip forwarding</code> на обоих маршрутизаторах; шлюз по умолчанию на ПК.</td></tr>
+<tr><td>Маршрут показан как <code>S</code> без <code>&gt;*</code></td><td>Неверный next-hop: адрес соседа не из подключённой сети или сосед недоступен.</td></tr>
+<tr><td><code>traceroute</code>: command not found</td><td>Не поставлен в п. 5; можно использовать <code>tracepath 10.0.0.19</code>.</td></tr>
+<tr><td>После перезагрузки всё пропало</td><td>Не выполнен <code>copy running-config startup-config</code> — настроить заново и сохранить.</td></tr>
+</table></div>
+
+<h2>17. Кратко для защиты</h2>
 <ul>
-<li><b>FRR</b> — пакет динамической маршрутизации для Linux (OSPF, BGP, RIP и др.); <code>zebra</code> передаёт найденные маршруты в ядро, <code>ospfd</code> работает по OSPF, <code>vtysh</code> — общая консоль настройки.</li>
-<li><b>OSPF</b> — протокол состояния каналов: маршрутизаторы находят соседей, обмениваются сведениями о сетях и сами строят таблицу маршрутов.</li>
-<li><b>Отличие от статики:</b> маршруты не прописываются вручную; при добавлении новой сети достаточно объявить её командой <code>network</code>.</li>
-<li><b>router-id</b> — уникальный идентификатор маршрутизатора в OSPF; <b>area 0</b> — магистральная (основная) область.</li>
-<li>Конечным ПК OSPF не нужен — им достаточно шлюза по умолчанию.</li>
+<li><b>FRR</b> — пакет маршрутизации для Linux; <code>vtysh</code> — единая консоль настройки в стиле Cisco IOS; <code>zebra</code> применяет адреса и маршруты в ядре, <code>staticd</code> обслуживает статические маршруты.</li>
+<li><b>Маршрут по умолчанию</b> <code>0.0.0.0/0</code> на рабочей станции отправляет все пакеты в чужие сети на шлюз.</li>
+<li><b>Статический маршрут</b> на маршрутизаторе указывает, через какой соседний маршрутизатор достижима неподключённая сеть. Маршруты нужны в обе стороны, иначе не вернётся ответ.</li>
+<li><b>ip forwarding</b> разрешает пересылку пакетов между интерфейсами (без неё машина не работает как маршрутизатор).</li>
+<li><b>running-config</b> — текущая конфигурация в памяти, <b>startup-config</b> — сохранённая (<code>/etc/frr/frr.conf</code>), загружается при старте.</li>
 </ul>
 </main>
 <script>

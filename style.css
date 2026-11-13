@@ -1,0 +1,64 @@
+/* Общий стиль библиотеки гайдов: чёрно-красная тема */
+:root{
+  --bg:#0b0b0d; --card:#141417; --card2:#1b1b20; --text:#ececef; --muted:#9a9aa3; --line:#2c2c33;
+  --code:#101013; --accent:#e5262d; --accent2:#ff4d4f; --accent-soft:rgba(229,38,45,.12);
+  --n28:#ff3b3b; --n30:#ff9f1c; --n29:#cfd2d8; --dev:#1c1c21; --devstroke:#5c5c66;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{background:var(--bg)}
+body{margin:0;background:radial-gradient(1200px 500px at 50% -200px,rgba(229,38,45,.18),transparent 70%) no-repeat,var(--bg);
+     color:var(--text);font:16px/1.6 "Segoe UI",Roboto,Arial,sans-serif}
+a{color:var(--accent2)}
+a:hover{color:#ff7a7c}
+main{max-width:1060px;margin:0 auto;padding:22px 16px 60px}
+.topbar{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;font-size:14px;margin-bottom:18px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+.topbar .brand{font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--text);text-decoration:none}
+.topbar .brand span{color:var(--accent)}
+.topbar a{text-decoration:none}
+h1{font-size:30px;line-height:1.25;margin:0 0 6px}
+h1 .red{color:var(--accent)}
+h2{font-size:21px;margin:36px 0 10px;padding:8px 0 0;border-top:1px solid var(--line)}
+h2::before{content:"";display:inline-block;width:6px;height:18px;background:var(--accent);border-radius:2px;margin-right:10px;vertical-align:-2px}
+h3{font-size:17px;margin:20px 0 6px;color:#fff}
+.sub{color:var(--muted);margin:0 0 16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin:12px 0}
+table{border-collapse:collapse;width:100%;font-size:15px}
+th,td{border:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top}
+th{background:var(--card2);color:#fff}
+td{background:var(--card)}
+.tbl{overflow-x:auto}
+code{background:var(--card2);color:#ffb3b4;padding:1px 5px;border-radius:4px;font-family:Consolas,"Cascadia Mono",monospace;font-size:14px}
+.pre{position:relative;margin:8px 0}
+pre{background:var(--code);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:8px;padding:12px 14px;
+    overflow-x:auto;margin:0;font-family:Consolas,"Cascadia Mono",monospace;font-size:14px;line-height:1.45;color:#f1f1f3}
+pre .c{color:#8a8a94}
+.copy{position:absolute;top:6px;right:6px;font-size:12px;padding:3px 9px;border:1px solid var(--accent);
+      border-radius:5px;background:var(--bg);color:var(--accent2);cursor:pointer}
+.copy:hover{background:var(--accent);color:#fff}
+.dot{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:5px;vertical-align:middle}
+.note{border-left:4px solid var(--accent);background:var(--accent-soft);padding:10px 14px;border-radius:6px;margin:12px 0}
+.warn{border-left-color:var(--n30);background:rgba(255,159,28,.10)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
+.dev-title{font-weight:700;margin:0 0 6px}
+.dev-title small{color:var(--muted);font-weight:400}
+.step{display:inline-block;min-width:26px;padding:0 7px;margin-right:6px;border-radius:13px;background:var(--accent);color:#fff;
+      font-size:14px;font-weight:700;text-align:center}
+svg{width:100%;height:auto;display:block}
+svg text{fill:var(--text);font-family:"Segoe UI",Roboto,Arial,sans-serif}
+svg .muted{fill:var(--muted)}
+ol li,ul li{margin:4px 0}
+/* Библиотека */
+.hero{padding:26px 0 8px}
+.hero p{max-width:720px}
+.shelf{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:14px;margin:18px 0}
+.book{display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-top:3px solid var(--accent);
+      border-radius:10px;padding:18px;color:var(--text);text-decoration:none;transition:transform .15s,border-color .15s}
+.book:hover{transform:translateY(-2px);border-color:var(--accent);color:var(--text)}
+.book .tag{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--accent2);margin-bottom:6px}
+.book h3{margin:0 0 8px;font-size:19px}
+.book p{color:var(--muted);margin:0 0 12px;flex:1}
+.book .go{color:var(--accent2);font-weight:600}
+.book.soon{border-top-color:var(--devstroke);opacity:.6;pointer-events:none}
+footer{color:var(--muted);font-size:13px;margin-top:40px;padding-top:12px;border-top:1px solid var(--line)}
+@media print{.copy{display:none}body{background:#fff;color:#000}}

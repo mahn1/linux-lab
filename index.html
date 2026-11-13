@@ -3,344 +3,42 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Маршрутизация через два роутера</title>
-<style>
-:root{
-  --bg:#f6f7f9; --card:#ffffff; --text:#1d2330; --muted:#5d6675; --line:#d9dee6;
-  --code:#f1f3f6; --accent:#2f6fde;
-  --n28:#2f6fde; --n30:#e07b12; --n29:#1f9d55; --dev:#eef2f8; --devstroke:#7a8699;
-}
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){
-    --bg:#14171c; --card:#1c2027; --text:#e6e9ee; --muted:#9aa3b2; --line:#323946;
-    --code:#242a33; --accent:#6c9cff;
-    --n28:#6c9cff; --n30:#ffa64d; --n29:#4fd18b; --dev:#262c36; --devstroke:#7d889b;
-  }
-}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--text);font:16px/1.55 "Segoe UI",Roboto,Arial,sans-serif}
-main{max-width:1060px;margin:0 auto;padding:24px 16px 60px}
-h1{font-size:28px;margin:0 0 4px}
-h2{font-size:21px;margin:34px 0 10px;padding-top:6px;border-top:1px solid var(--line)}
-h3{font-size:17px;margin:20px 0 6px}
-.sub{color:var(--muted);margin:0 0 18px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin:12px 0}
-table{border-collapse:collapse;width:100%;font-size:15px}
-th,td{border:1px solid var(--line);padding:6px 9px;text-align:left}
-th{background:var(--code)}
-.tbl{overflow-x:auto}
-code{background:var(--code);padding:1px 5px;border-radius:4px;font-family:Consolas,"Cascadia Mono",monospace;font-size:14px}
-.pre{position:relative;margin:8px 0}
-pre{background:var(--code);border:1px solid var(--line);border-radius:8px;padding:12px 14px;overflow-x:auto;margin:0;
-    font-family:Consolas,"Cascadia Mono",monospace;font-size:14px;line-height:1.45}
-.copy{position:absolute;top:6px;right:6px;font-size:12px;padding:3px 8px;border:1px solid var(--line);
-      border-radius:5px;background:var(--card);color:var(--muted);cursor:pointer}
-.copy:hover{color:var(--text)}
-.dot{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:5px;vertical-align:middle}
-.note{border-left:4px solid var(--accent);background:var(--code);padding:10px 14px;border-radius:6px;margin:12px 0}
-.warn{border-left-color:var(--n30)}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
-.dev-title{font-weight:600;margin:0 0 4px}
-.dev-title small{color:var(--muted);font-weight:400}
-svg{width:100%;height:auto;display:block}
-svg text{fill:var(--text);font-family:"Segoe UI",Roboto,Arial,sans-serif}
-svg .muted{fill:var(--muted)}
-ol li{margin:4px 0}
-@media print{.copy{display:none}body{background:#fff}}
-</style>
+<title>LinuxLab · библиотека гайдов</title>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
 <main>
-<h1>Маршрутизация в Linux: ПК1 → R1 → R2 → ПК2</h1>
-<p class="sub">Лабораторная работа «Реализация сетей в Linux». Пинг с одного компьютера на другой через два маршрутизатора и коммутатор, настройка через Netplan.</p>
-<p class="sub"><a href="frr.html">→ Вариант с динамической маршрутизацией через FRR (OSPF)</a></p>
-
-<h2>1. Схема стенда</h2>
-<div class="card">
-<svg viewBox="0 0 1000 560" role="img" aria-label="Схема: ПК1, маршрутизаторы R1 и R2, ПК2, все кабели подключены к коммутатору">
-  <!-- Логические подсети (полосы сверху) -->
-  <rect x="40" y="18" width="330" height="26" rx="6" fill="var(--n28)" opacity=".15"/>
-  <text x="205" y="36" text-anchor="middle" font-size="14" font-weight="600" fill="var(--n28)" style="fill:var(--n28)">Сеть A: 10.0.0.0/28</text>
-  <rect x="380" y="18" width="240" height="26" rx="6" fill="var(--n30)" opacity=".15"/>
-  <text x="500" y="36" text-anchor="middle" font-size="14" font-weight="600" style="fill:var(--n30)">Сеть B: 10.0.0.24/30</text>
-  <rect x="630" y="18" width="330" height="26" rx="6" fill="var(--n29)" opacity=".15"/>
-  <text x="795" y="36" text-anchor="middle" font-size="14" font-weight="600" style="fill:var(--n29)">Сеть C: 10.0.0.16/29</text>
-
-  <!-- Кабели к коммутатору -->
-  <g stroke-width="3" fill="none">
-    <path d="M110 170 C110 300 250 330 250 420" stroke="var(--n28)"/>
-    <path d="M350 170 C350 300 330 330 330 420" stroke="var(--n28)"/>
-    <path d="M430 170 C430 300 450 330 450 420" stroke="var(--n30)"/>
-    <path d="M570 170 C570 300 550 330 550 420" stroke="var(--n30)"/>
-    <path d="M650 170 C650 300 670 330 670 420" stroke="var(--n29)"/>
-    <path d="M890 170 C890 300 750 330 750 420" stroke="var(--n29)"/>
-  </g>
-
-  <!-- Устройства -->
-  <g stroke="var(--devstroke)" stroke-width="1.5" fill="var(--dev)">
-    <rect x="40" y="70" width="140" height="100" rx="10"/>
-    <rect x="300" y="70" width="180" height="100" rx="10"/>
-    <rect x="520" y="70" width="180" height="100" rx="10"/>
-    <rect x="820" y="70" width="140" height="100" rx="10"/>
-  </g>
-  <!-- значки -->
-  <g stroke="var(--devstroke)" stroke-width="1.5" fill="none">
-    <rect x="92" y="84" width="36" height="24" rx="2"/><line x1="110" y1="108" x2="110" y2="114"/><line x1="100" y1="114" x2="120" y2="114"/>
-    <rect x="872" y="84" width="36" height="24" rx="2"/><line x1="890" y1="108" x2="890" y2="114"/><line x1="880" y1="114" x2="900" y2="114"/>
-    <circle cx="390" cy="96" r="14"/><path d="M380 96h20M394 90l6 6-6 6M386 90l-6 6 6 6"/>
-    <circle cx="610" cy="96" r="14"/><path d="M600 96h20M614 90l6 6-6 6M606 90l-6 6 6 6"/>
-  </g>
-  <text x="110" y="137" text-anchor="middle" font-size="17" font-weight="700">ПК1</text>
-  <text x="110" y="157" text-anchor="middle" font-size="12" class="muted">шлюз 10.0.0.3</text>
-  <text x="390" y="137" text-anchor="middle" font-size="17" font-weight="700">R1</text>
-  <text x="390" y="157" text-anchor="middle" font-size="12" class="muted">маршрутизатор</text>
-  <text x="610" y="137" text-anchor="middle" font-size="17" font-weight="700">R2</text>
-  <text x="610" y="157" text-anchor="middle" font-size="12" class="muted">маршрутизатор</text>
-  <text x="890" y="137" text-anchor="middle" font-size="17" font-weight="700">ПК2</text>
-  <text x="890" y="157" text-anchor="middle" font-size="12" class="muted">шлюз 10.0.0.17</text>
-
-  <!-- Порты на устройствах -->
-  <g stroke="var(--card)" stroke-width="2">
-    <circle cx="110" cy="170" r="6" fill="var(--n28)"/>
-    <circle cx="350" cy="170" r="6" fill="var(--n28)"/>
-    <circle cx="430" cy="170" r="6" fill="var(--n30)"/>
-    <circle cx="570" cy="170" r="6" fill="var(--n30)"/>
-    <circle cx="650" cy="170" r="6" fill="var(--n29)"/>
-    <circle cx="890" cy="170" r="6" fill="var(--n29)"/>
-  </g>
-
-  <!-- Подписи интерфейсов -->
-  <g font-size="12.5">
-    <text x="118" y="198" font-weight="700" style="fill:var(--n28)">enp4s0 · Net 0</text>
-    <text x="118" y="214">10.0.0.1/28</text>
-
-    <text x="342" y="198" text-anchor="end" font-weight="700" style="fill:var(--n28)">enp1s0 · Net 1</text>
-    <text x="342" y="214" text-anchor="end">10.0.0.3/28</text>
-
-    <text x="438" y="242" font-weight="700" style="fill:var(--n30)">enp4s0 · Net 0</text>
-    <text x="438" y="258">10.0.0.25/30</text>
-
-    <text x="562" y="198" text-anchor="end" font-weight="700" style="fill:var(--n30)">enp1s0 · Net 1</text>
-    <text x="562" y="214" text-anchor="end">10.0.0.26/30</text>
-
-    <text x="658" y="242" font-weight="700" style="fill:var(--n29)">enp3s0 · Net 2</text>
-    <text x="658" y="258">10.0.0.17/29</text>
-
-    <text x="882" y="198" text-anchor="end" font-weight="700" style="fill:var(--n29)">enp1s0 · Net 1</text>
-    <text x="882" y="214" text-anchor="end">10.0.0.19/29</text>
-  </g>
-
-  <!-- Коммутатор -->
-  <rect x="200" y="420" width="600" height="70" rx="10" fill="var(--dev)" stroke="var(--devstroke)" stroke-width="1.5"/>
-  <g stroke="var(--card)" stroke-width="2">
-    <rect x="242" y="414" width="16" height="12" rx="2" fill="var(--n28)"/>
-    <rect x="322" y="414" width="16" height="12" rx="2" fill="var(--n28)"/>
-    <rect x="442" y="414" width="16" height="12" rx="2" fill="var(--n30)"/>
-    <rect x="542" y="414" width="16" height="12" rx="2" fill="var(--n30)"/>
-    <rect x="662" y="414" width="16" height="12" rx="2" fill="var(--n29)"/>
-    <rect x="742" y="414" width="16" height="12" rx="2" fill="var(--n29)"/>
-  </g>
-  <text x="500" y="455" text-anchor="middle" font-size="17" font-weight="700">Коммутатор</text>
-  <text x="500" y="476" text-anchor="middle" font-size="12" class="muted">все кабели стенда; настройка не требуется</text>
-
-  <!-- Путь пинга -->
-  <g font-size="13">
-    <path d="M110 525 H890" stroke="var(--accent)" stroke-width="2" stroke-dasharray="6 5" fill="none" marker-end="url(#arr)"/>
-    <text x="500" y="546" text-anchor="middle" class="muted">путь ping: 10.0.0.1 → 10.0.0.3 (R1) → 10.0.0.26 (R2) → 10.0.0.19</text>
-  </g>
-  <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--accent)"/></marker></defs>
-</svg>
-<p style="margin:6px 0 0;font-size:14px;color:var(--muted)">
-<span class="dot" style="background:var(--n28)"></span>сеть A /28 &nbsp;
-<span class="dot" style="background:var(--n30)"></span>сеть B /30 &nbsp;
-<span class="dot" style="background:var(--n29)"></span>сеть C /29 &nbsp;·&nbsp; «Net N» — подпись кабеля/гнезда на стенде, в конфигах не используется.
-</p>
+<nav class="topbar"><a class="brand" href="./">Linux<span>Lab</span></a><b>Библиотека</b> <a href="static.html">Статика · Netplan</a> <a href="frr.html">Статика · FRR</a></nav>
+<h1>Linux<span class="red">Lab</span> — библиотека гайдов</h1>
+<p class="sub">Реализация сетей в Linux: маршрутизация через два маршрутизатора.</p>
+<section class="hero">
+<p>Библиотека пошаговых гайдов по дисциплине «Реализация сетей в Linux». Одна схема стенда — два способа маршрутизации. В каждом гайде: схема с IP-адресами, интерфейсами и кабелями, готовые команды с кнопкой «Копировать», проверка и разбор ошибок.</p>
+</section>
+<div class="shelf">
+<a class="book" href="frr.html">
+  <div class="tag">Часть 3 · по методичке</div>
+  <h3>Статическая маршрутизация с пакетом FRR</h3>
+  <p>timeshift --restore, установка frr на 4 машины, IP-адреса и маршруты в vtysh, ip forwarding, copy running-config startup-config, перезагрузка.</p>
+  <span class="go">Открыть гайд →</span>
+</a>
+<a class="book" href="static.html">
+  <div class="tag">Netplan · sysctl</div>
+  <h3>Статическая маршрутизация через Netplan</h3>
+  <p>Адреса и маршруты в YAML-конфигах Netplan, включение пересылки через sysctl, проверка ip r, ping и tracepath.</p>
+  <span class="go">Открыть гайд →</span>
+</a>
 </div>
-
-<h2>2. Таблица адресации</h2>
+<h2>Стенд</h2>
 <div class="tbl"><table>
-<tr><th>Устройство</th><th>Кабель</th><th>Интерфейс</th><th>IP / маска</th><th>Сеть</th><th>Шлюз / маршрут</th></tr>
-<tr><td>ПК1</td><td>Net 0</td><td>enp4s0</td><td>10.0.0.1/28</td><td>A</td><td>default via 10.0.0.3</td></tr>
-<tr><td rowspan="2">R1</td><td>Net 1</td><td>enp1s0</td><td>10.0.0.3/28</td><td>A</td><td>—</td></tr>
-<tr><td>Net 0</td><td>enp4s0</td><td>10.0.0.25/30</td><td>B</td><td>10.0.0.16/29 via 10.0.0.26</td></tr>
-<tr><td rowspan="2">R2</td><td>Net 1</td><td>enp1s0</td><td>10.0.0.26/30</td><td>B</td><td>10.0.0.0/28 via 10.0.0.25</td></tr>
-<tr><td>Net 2</td><td>enp3s0</td><td>10.0.0.17/29</td><td>C</td><td>—</td></tr>
-<tr><td>ПК2</td><td>Net 1</td><td>enp1s0</td><td>10.0.0.19/29</td><td>C</td><td>default via 10.0.0.17</td></tr>
+<tr><th>Узел</th><th>Интерфейсы и адреса</th></tr>
+<tr><td>ПК1</td><td>enp4s0 — 10.0.0.1/28</td></tr>
+<tr><td>R1</td><td>enp1s0 — 10.0.0.3/28 · enp4s0 — 10.0.0.25/30</td></tr>
+<tr><td>R2</td><td>enp1s0 — 10.0.0.26/30 · enp3s0 — 10.0.0.17/29</td></tr>
+<tr><td>ПК2</td><td>enp1s0 — 10.0.0.19/29</td></tr>
 </table></div>
-
-<h3>Расчёт подсетей</h3>
-<div class="tbl"><table>
-<tr><th>Сеть</th><th>Маска</th><th>Адрес сети</th><th>Узлы</th><th>Broadcast</th><th>Узлов</th></tr>
-<tr><td>A (ПК1 — R1)</td><td>/28 = 255.255.255.240</td><td>10.0.0.0</td><td>10.0.0.1 – 10.0.0.14</td><td>10.0.0.15</td><td>14</td></tr>
-<tr><td>C (R2 — ПК2)</td><td>/29 = 255.255.255.248</td><td>10.0.0.16</td><td>10.0.0.17 – 10.0.0.22</td><td>10.0.0.23</td><td>6</td></tr>
-<tr><td>B (R1 — R2)</td><td>/30 = 255.255.255.252</td><td>10.0.0.24</td><td>10.0.0.25 – 10.0.0.26</td><td>10.0.0.27</td><td>2</td></tr>
-</table></div>
-<p>Подсети не пересекаются: 0–15, 16–23, 24–27. Сеть /30 между маршрутизаторами — ровно на два адреса, по одному на каждый конец канала.</p>
-
-<h2>3. Подготовка (на всех четырёх машинах)</h2>
-<ol>
-<li>Подключить кабели по схеме.</li>
-<li>Проверить имена интерфейсов — должны совпадать с таблицей:
-<div class="pre"><pre>ip a</pre></div></li>
-<li>Посмотреть, какие конфиги Netplan уже есть:
-<div class="pre"><pre>ls /etc/netplan/</pre></div>
-Если там лежит другой файл с теми же интерфейсами (например <code>50-cloud-init.yaml</code>), убрать его, чтобы не было конфликта:
-<div class="pre"><pre>sudo mv /etc/netplan/50-cloud-init.yaml /etc/netplan/50-cloud-init.yaml.bak</pre></div></li>
-</ol>
-<div class="note">Конфиг можно набрать в <code>sudo nano /etc/netplan/01-lab.yaml</code> или вставить одной командой (блоки ниже — команда <code>tee</code> сразу создаёт файл). В YAML отступы — <b>только пробелы</b>, без табуляции.</div>
-
-<h2>4. Конфигурация Netplan</h2>
-<div class="grid">
-
-<div class="card">
-<p class="dev-title">ПК1 <small>enp4s0 · 10.0.0.1/28</small></p>
-<div class="pre"><pre>sudo tee /etc/netplan/01-lab.yaml &gt; /dev/null &lt;&lt;'EOF'
-network:
-  version: 2
-  renderer: networkd
-  ethernets:
-    enp4s0:
-      addresses: [10.0.0.1/28]
-      routes:
-        - to: default
-          via: 10.0.0.3
-EOF</pre></div>
-</div>
-
-<div class="card">
-<p class="dev-title">ПК2 <small>enp1s0 · 10.0.0.19/29</small></p>
-<div class="pre"><pre>sudo tee /etc/netplan/01-lab.yaml &gt; /dev/null &lt;&lt;'EOF'
-network:
-  version: 2
-  renderer: networkd
-  ethernets:
-    enp1s0:
-      addresses: [10.0.0.19/29]
-      routes:
-        - to: default
-          via: 10.0.0.17
-EOF</pre></div>
-</div>
-
-<div class="card">
-<p class="dev-title">R1 <small>enp1s0 · 10.0.0.3/28 &nbsp;|&nbsp; enp4s0 · 10.0.0.25/30</small></p>
-<div class="pre"><pre>sudo tee /etc/netplan/01-lab.yaml &gt; /dev/null &lt;&lt;'EOF'
-network:
-  version: 2
-  renderer: networkd
-  ethernets:
-    enp1s0:
-      addresses: [10.0.0.3/28]
-    enp4s0:
-      addresses: [10.0.0.25/30]
-      routes:
-        - to: 10.0.0.16/29
-          via: 10.0.0.26
-EOF</pre></div>
-</div>
-
-<div class="card">
-<p class="dev-title">R2 <small>enp1s0 · 10.0.0.26/30 &nbsp;|&nbsp; enp3s0 · 10.0.0.17/29</small></p>
-<div class="pre"><pre>sudo tee /etc/netplan/01-lab.yaml &gt; /dev/null &lt;&lt;'EOF'
-network:
-  version: 2
-  renderer: networkd
-  ethernets:
-    enp1s0:
-      addresses: [10.0.0.26/30]
-      routes:
-        - to: 10.0.0.0/28
-          via: 10.0.0.25
-    enp3s0:
-      addresses: [10.0.0.17/29]
-EOF</pre></div>
-</div>
-</div>
-
-<div class="note warn">Старый Netplan (Ubuntu 20.04 и раньше) может не принять <code>routes: - to: default</code>. Тогда на ПК1 вместо блока <code>routes</code> пишется <code>gateway4: 10.0.0.3</code>, на ПК2 — <code>gateway4: 10.0.0.17</code>.</div>
-
-<h2>5. Применение (на всех четырёх)</h2>
-<div class="pre"><pre>sudo chmod 600 /etc/netplan/01-lab.yaml
-sudo netplan apply</pre></div>
-<p>Безопасный вариант — <code>sudo netplan try</code>: если связь пропадёт, настройки откатятся через 120 секунд.</p>
-
-<h2>6. Пересылка пакетов (только R1 и R2)</h2>
-<p>По умолчанию Linux не передаёт пакеты между интерфейсами — без этого шага пинг дальше первого маршрутизатора не пройдёт.</p>
-<div class="pre"><pre>sudo sysctl -w net.ipv4.ip_forward=1</pre></div>
-<p>Команда сразу выводит <code>net.ipv4.ip_forward = 1</code> — это и есть проверка. Настройка действует до перезагрузки; после перезагрузки команду нужно выполнить снова.</p>
-
-<h2>7. Проверка</h2>
-<h3>Адреса и маршруты (на каждой машине)</h3>
-<div class="pre"><pre>ip -br a
-ip r</pre></div>
-<p>На маршрутизаторе в <code>ip r</code> должно быть <b>три строки</b>: две сети, подключённые напрямую (<code>proto kernel</code>), и один статический маршрут в «чужую» сеть (<code>via</code>, <code>proto static</code>).</p>
-<div class="grid">
-<div class="card"><p class="dev-title">R1 — <code>ip r</code></p>
-<pre>10.0.0.0/28 dev enp1s0 proto kernel scope link src 10.0.0.3
-10.0.0.16/29 via 10.0.0.26 dev enp4s0 proto static
-10.0.0.24/30 dev enp4s0 proto kernel scope link src 10.0.0.25</pre></div>
-<div class="card"><p class="dev-title">R2 — <code>ip r</code></p>
-<pre>10.0.0.0/28 via 10.0.0.25 dev enp1s0 proto static
-10.0.0.16/29 dev enp3s0 proto kernel scope link src 10.0.0.17
-10.0.0.24/30 dev enp1s0 proto kernel scope link src 10.0.0.26</pre></div>
-</div>
-<p>Нет строки с <code>via</code> — Netplan не применился или ошибка в блоке <code>routes</code>. На ПК в <code>ip r</code> две строки: <code>default via …</code> и своя сеть.</p>
-<p>Кратко по всем машинам:</p>
-<div class="tbl"><table>
-<tr><th>Машина</th><th>Что должно быть в <code>ip r</code></th></tr>
-<tr><td>ПК1</td><td><code>default via 10.0.0.3 dev enp4s0</code>, <code>10.0.0.0/28 dev enp4s0</code></td></tr>
-<tr><td>R1</td><td><code>10.0.0.0/28 dev enp1s0</code>, <code>10.0.0.24/30 dev enp4s0</code>, <code>10.0.0.16/29 via 10.0.0.26 dev enp4s0</code></td></tr>
-<tr><td>R2</td><td><code>10.0.0.24/30 dev enp1s0</code>, <code>10.0.0.16/29 dev enp3s0</code>, <code>10.0.0.0/28 via 10.0.0.25 dev enp1s0</code></td></tr>
-<tr><td>ПК2</td><td><code>default via 10.0.0.17 dev enp1s0</code>, <code>10.0.0.16/29 dev enp1s0</code></td></tr>
-</table></div>
-
-<h3>Пинг по цепочке с ПК1</h3>
-<p>Идти по шагам: где пинг перестал проходить — там и ошибка.</p>
-<div class="pre"><pre>ping -c 3 10.0.0.3     # R1, вход (своя сеть A)
-ping -c 3 10.0.0.25    # R1, выход
-ping -c 3 10.0.0.26    # R2, вход (нужен маршрут обратно на R2)
-ping -c 3 10.0.0.17    # R2, выход
-ping -c 3 10.0.0.19    # ПК2 — цель лабораторной</pre></div>
-<h3>Маршрут пакета</h3>
-<div class="pre"><pre>tracepath 10.0.0.19</pre></div>
-<p>Ожидаемые прыжки: <code>10.0.0.3</code> → <code>10.0.0.26</code> → <code>10.0.0.19</code>. Обратная проверка — с ПК2: <code>ping -c 3 10.0.0.1</code>.</p>
-
-<h2>8. Если не работает</h2>
-<div class="tbl"><table>
-<tr><th>Симптом</th><th>Причина и что делать</th></tr>
-<tr><td><code>netplan apply</code> ругается на YAML</td><td>Табуляция или сбитые отступы. Проверить: <code>sudo netplan generate</code>.</td></tr>
-<tr><td>Не пингуется даже соседний интерфейс</td><td>Кабель не в том гнезде / интерфейс не поднят: <code>ip -br a</code> (должно быть <code>UP</code>), проверить имя интерфейса и подключение по схеме.</td></tr>
-<tr><td>Пинг до 10.0.0.3 и 10.0.0.25 есть, дальше — нет</td><td>На R1 не выполнена <code>sudo sysctl -w net.ipv4.ip_forward=1</code> (или машину перезагружали) или на R2 нет маршрута <code>10.0.0.0/28 via 10.0.0.25</code> (ответ не может вернуться).</td></tr>
-<tr><td>До R2 доходит, до ПК2 — нет</td><td>На R2 нет <code>ip_forward</code>, у ПК2 нет шлюза 10.0.0.17 или неверная маска (/29).</td></tr>
-<tr><td>Всё настроено, но тишина</td><td>Файрвол: <code>sudo ufw status</code>; на время лабораторной <code>sudo ufw disable</code>. Ещё один конфиг Netplan с теми же интерфейсами — см. п. 3.</td></tr>
-</table></div>
-
-<h2>9. Кратко для защиты</h2>
-<ul>
-<li><b>Зачем маршрутизатор:</b> ПК1 и ПК2 в разных подсетях, напрямую (через ARP) друг друга не видят — пакет передаётся шлюзу.</li>
-<li><b>Шлюз по умолчанию</b> у конечных ПК — ближайший интерфейс маршрутизатора в их сети.</li>
-<li><b>Статические маршруты</b> на R1 и R2 нужны для «чужих» сетей: R1 не знает про сеть C, R2 — про сеть A. Маршрут нужен в обе стороны, иначе ответ на ping не вернётся.</li>
-<li><b>ip_forward</b> разрешает ядру пересылать пакеты между интерфейсами.</li>
-<li><b>/30</b> между маршрутизаторами — минимальная сеть для двух адресов.</li>
-<li><b>Коммутатор</b> работает на канальном уровне (MAC), IP-адресов не требует; разделение сетей задаётся IP-подсетями.</li>
-</ul>
+<p class="sub" style="margin-top:10px">Сети: A 10.0.0.0/28 (ПК1 — R1), B 10.0.0.24/30 (R1 — R2), C 10.0.0.16/29 (R2 — ПК2).</p>
+<footer>LinuxLab · гайды к лабораторным работам</footer>
 </main>
-<script>
-// Кнопки «Копировать» для блоков команд (комментарии после # не копируются)
-document.querySelectorAll('.pre').forEach(function (box) {
-  var b = document.createElement('button');
-  b.className = 'copy'; b.textContent = 'Копировать';
-  b.onclick = function () {
-    var text = box.querySelector('pre').innerText.split('\n')
-      .map(function (l) { return l.replace(/\s+#\s.*$/, ''); }).join('\n');
-    try {
-      navigator.clipboard.writeText(text).then(function () {
-        b.textContent = 'Скопировано'; setTimeout(function () { b.textContent = 'Копировать'; }, 1500);
-      });
-    } catch (e) {}
-  };
-  box.appendChild(b);
-});
-</script>
+
 </body>
 </html>
